@@ -8,49 +8,61 @@ export default function SubjectsPage() {
   const { projectCode } = useParams();
   const router = useRouter();
   const [subjects, setSubjects] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('読み込み中…');
 
   useEffect(() => {
     (async () => {
-      // ログイン確認
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.replace(`/${projectCode}/login`);
         return;
       }
-      // 科目取得
+
       const { data, error } = await supabase
         .from('subjects')
-        .select('id,name')
-        .order('created_at', { ascending: true });
+        .select('id, name')
+        .order('name');
 
-      if (error) setErr(error.message);
-      else setSubjects(data || []);
-      setLoading(false);
+      if (error) setMsg('読み込みエラー: ' + error.message);
+      else {
+        setSubjects(data || []);
+        if (!data || data.length === 0) setMsg('まだ科目がありません。');
+        else setMsg('');
+      }
     })();
   }, [projectCode, router]);
 
-  if (loading) return <main className="p-6">読み込み中…</main>;
-  if (err)     return <main className="p-6 text-red-600">読み込みエラー：{err}</main>;
+  function goDashboard() {
+    router.push(`/${projectCode}`);
+  }
+
+  function openSections(subjectId) {
+    router.push(`/${projectCode}/sections?subject=${subjectId}`);
+  }
 
   return (
     <main className="p-6 max-w-2xl mx-auto">
-      <h1 className="text-3xl font-bold">Subjects ({projectCode})</h1>
-      {subjects.length === 0 ? (
-        <p className="mt-4">まだ科目がありません。</p>
-      ) : (
-        <ul className="mt-4 space-y-2">
-          {subjects.map(s => (
-            <li key={s.id} className="border rounded p-3">
-              <div className="font-semibold">{s.name}</div>
-              {/* 次の画面（セクション一覧）に進めたくなったらここをリンク化 */}
-              {/* <a href={`/${projectCode}/sections?subjectId=${s.id}`} className="text-blue-600 underline">開く</a> */}
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="mt-6"><a href={`/${projectCode}`} className="underline">◀ ダッシュボードへ戻る</a></p>
+      <h1 className="text-2xl font-bold">Subjects ({projectCode})</h1>
+
+      {msg && <p className="mt-4 text-sm">{msg}</p>}
+
+      <div className="mt-4 space-y-3">
+        {subjects.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => openSections(s.id)}
+            className="w-full text-left border rounded px-4 py-2 hover:bg-gray-50"
+          >
+            {s.name}
+          </button>
+        ))}
+      </div>
+
+      <p className="mt-6 text-sm">
+        <button onClick={goDashboard} className="underline">
+          ◀ ダッシュボードへ戻る
+        </button>
+      </p>
     </main>
   );
 }
