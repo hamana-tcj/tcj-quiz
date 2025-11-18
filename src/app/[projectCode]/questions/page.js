@@ -60,23 +60,71 @@ export default function QuestionsPage() {
   }
 
   // 「回答を送信」ボタン
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!questions.length) return;
-
+  
+    // ① 成績計算
     let total = questions.length;
     let correct = 0;
-
+  
     questions.forEach((q) => {
       const chosenId = selected[q.id];
       const choices = q.choices ?? [];
       const correctChoice = choices.find((c) => c.is_correct);
-
+  
       if (chosenId && correctChoice && chosenId === correctChoice.id) {
         correct += 1;
       }
     });
-
+  
     setResult({ total, correct });
+  
+    // ② ログイン中のユーザーを取得
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+  
+    if (userError) {
+      console.error('getUser error', userError);
+      return;
+    }
+    if (!user) {
+      console.warn('not logged in, skip logging');
+      return;
+    }
+  
+    // ③ insert 用データをまとめる
+    const rows = questions
+      .map((q) => {
+        const chosenId = selected[q.id];
+        if (!chosenId) return null; // 未回答はスキップ
+  
+        const choices = q.choices ?? [];
+        const correctChoice = choices.find((c) => c.is_correct);
+        const isCorrect =
+          correctChoice && chosenId === correctChoice.id;
+  
+        return {
+          user_id: user.id,
+          question_id: q.id,
+          choice_id: chosenId,
+          is_correct: isCorrect,
+          section_id: q.section_id,
+        };
+      })
+      .filter(Boolean); // null を除去
+  
+    if (!rows.length) return;
+  
+    // ④ Supabase に保存
+    const { error: logError } = await supabase
+      .from('answer_logs')
+      .insert(rows);
+  
+    if (logError) {
+      console.error('answer_logs insert error', logError);
+    }
   }
 
   // 戻る
