@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams, useParams, useRouter } from 'next/navigation';
+import { useSearchParams, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function QuestionsOneByOnePage() {
   const searchParams = useSearchParams();
   const { projectCode } = useParams();
-  const router = useRouter();
 
   const sectionId = searchParams.get('section');
 
@@ -15,11 +14,15 @@ export default function QuestionsOneByOnePage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [questions, setQuestions] = useState([]);
 
-  const [currentIndex, setCurrentIndex] = useState(0);        // 何問目か
-  const [selectedChoiceId, setSelectedChoiceId] = useState(''); // 現在の回答
-  const [phase, setPhase] = useState('question');             // "question" | "result" | "finish"
+  const [currentIndex, setCurrentIndex] = useState(0);           // 何問目か
+  const [selectedChoiceId, setSelectedChoiceId] = useState('');  // 現在の回答
+  const [phase, setPhase] = useState('question');               // "question" | "result" | "finish"
   const [isCorrectCurrent, setIsCorrectCurrent] = useState(null); // true / false / null
-  const [totalCorrect, setTotalCorrect] = useState(0);        // 累計正解数
+  const [totalCorrect, setTotalCorrect] = useState(0);           // 累計正解数
+
+  // ★ 各問題ごとの結果一覧
+  // { questionId, body, userChoiceLabel, isCorrect, explanation } の配列
+  const [answerDetails, setAnswerDetails] = useState([]);
 
   // 質問＋選択肢の取得
   useEffect(() => {
@@ -59,6 +62,7 @@ export default function QuestionsOneByOnePage() {
         setPhase('question');
         setIsCorrectCurrent(null);
         setTotalCorrect(0);
+        setAnswerDetails([]); // ← リセット
       }
       setLoading(false);
     };
@@ -69,7 +73,9 @@ export default function QuestionsOneByOnePage() {
   // 解答ログを Supabase に保存（1問ごと）
   const logAnswer = async (qId, choiceId, isCorrect) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) return; // 未ログインなら何もしない
 
       await supabase.from('answer_logs').insert({
@@ -90,10 +96,7 @@ export default function QuestionsOneByOnePage() {
         <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
         <p className="mt-4 text-red-600">セクションIDが指定されていません。</p>
         <p className="mt-6">
-          <a
-            href={`/${projectCode}/sections`}
-            className="underline"
-          >
+          <a href={`/${projectCode}/sections`} className="underline">
             ◀ セクション一覧へ戻る
           </a>
         </p>
@@ -116,10 +119,7 @@ export default function QuestionsOneByOnePage() {
         <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
         <p className="mt-4 text-red-600">{errorMsg}</p>
         <p className="mt-6">
-          <a
-            href={`/${projectCode}/sections`}
-            className="underline"
-          >
+          <a href={`/${projectCode}/sections`} className="underline">
             ◀ セクション一覧へ戻る
           </a>
         </p>
@@ -133,10 +133,7 @@ export default function QuestionsOneByOnePage() {
         <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
         <p className="mt-4">このセクションにはまだ問題がありません。</p>
         <p className="mt-6">
-          <a
-            href={`/${projectCode}/sections`}
-            className="underline"
-          >
+          <a href={`/${projectCode}/sections`} className="underline">
             ◀ セクション一覧へ戻る
           </a>
         </p>
@@ -153,7 +150,7 @@ export default function QuestionsOneByOnePage() {
     if (!selectedChoiceId) return;
 
     const choice = currentQuestion.choices.find(
-      (c) => c.id === selectedChoiceId
+      (c) => c.id === selectedChoiceId,
     );
     const isCorrect = !!choice?.is_correct;
 
@@ -161,7 +158,19 @@ export default function QuestionsOneByOnePage() {
     setPhase('result');
     setTotalCorrect((prev) => prev + (isCorrect ? 1 : 0));
 
-    // ログ保存（await してもいいし、しなくてもOK）
+    // ★ この問題の詳細を answerDetails に追加
+    setAnswerDetails((prev) => [
+      ...prev,
+      {
+        questionId: currentQuestion.id,
+        body: currentQuestion.body,
+        userChoiceLabel: choice ? choice.label : '未回答',
+        isCorrect,
+        explanation: currentQuestion.explanation,
+      },
+    ]);
+
+    // ログ保存
     await logAnswer(currentQuestion.id, selectedChoiceId, isCorrect);
   };
 
@@ -182,7 +191,8 @@ export default function QuestionsOneByOnePage() {
   return (
     <main className="p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold">
-        Questions ({projectCode}) - {currentIndex + 1}問目 / 全{totalQuestions}問
+        Questions ({projectCode}) - {currentIndex + 1}問目 / 全{totalQuestions}
+        問
       </h1>
 
       {/* 質問表示フェーズ */}
@@ -218,7 +228,7 @@ export default function QuestionsOneByOnePage() {
 
       {/* 判定＆解説フェーズ */}
       {phase === 'result' && (
-        <section className="mt-6 border rounded p-4 bg-white">
+        <section className="mt-6 border rounded p-4 bg白 bg-white">
           <h2 className="font-semibold">
             Q{currentIndex + 1}. {currentQuestion.body}
           </h2>
@@ -248,11 +258,30 @@ export default function QuestionsOneByOnePage() {
             全{totalQuestions}問中 {totalCorrect}問 正解でした。
           </p>
 
+          {/* 問題ごとの詳細一覧 */}
+          <ul className="mt-4 space-y-3">
+            {answerDetails.map((row, index) => (
+              <li key={row.questionId} className="border rounded p-3">
+                <p className="font-semibold">
+                  Q{index + 1}. {row.body}
+                </p>
+                <p className="mt-1">あなたの回答：{row.userChoiceLabel}</p>
+                <p
+                  className={`mt-1 font-semibold ${
+                    row.isCorrect ? 'text-green-700' : 'text-red-700'
+                  }`}
+                >
+                  {row.isCorrect ? '〇 正解' : '✕ 不正解'}
+                </p>
+                <p className="mt-1 text-sm text-gray-700">
+                  解説: {row.explanation}
+                </p>
+              </li>
+            ))}
+          </ul>
+
           <p className="mt-6">
-            <a
-              href={`/${projectCode}/sections`}
-              className="underline"
-            >
+            <a href={`/${projectCode}/sections`} className="underline">
               ◀ セクション一覧へ戻る
             </a>
           </p>
