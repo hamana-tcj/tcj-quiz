@@ -57,7 +57,7 @@ export default function SectionsPage() {
   }
 
   function openQuestions(sectionId) {
-    router.push(`/${projectCode}/questions?section=${sectionId}`);
+    router.push(`/${projectCode}/questions?section=${sectionId}&subject=${subjectId}`);
   }
 
   return (

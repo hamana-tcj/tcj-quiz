@@ -9,7 +9,10 @@ export default function QuestionsOneByOnePage() {
   const { projectCode } = useParams();
 
   const sectionId = searchParams.get('section');
-
+  const subjectId = searchParams.get('subject');
+  const sectionsHref = subjectId
+    ? `/${projectCode}/sections?subject=${subjectId}`
+    : `/${projectCode}/sections`;
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [questions, setQuestions] = useState([]);
@@ -96,9 +99,12 @@ export default function QuestionsOneByOnePage() {
         <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
         <p className="mt-4 text-red-600">セクションIDが指定されていません。</p>
         <p className="mt-6">
-          <a href={`/${projectCode}/sections`} className="underline">
-            ◀ セクション一覧へ戻る
-          </a>
+        <a
+          href={sectionsHref}
+          className="underline"
+        >
+         ◀ セクション一覧へ戻る
+        </a>
         </p>
       </main>
     );
@@ -119,9 +125,12 @@ export default function QuestionsOneByOnePage() {
         <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
         <p className="mt-4 text-red-600">{errorMsg}</p>
         <p className="mt-6">
-          <a href={`/${projectCode}/sections`} className="underline">
-            ◀ セクション一覧へ戻る
-          </a>
+        <a
+          href={sectionsHref}
+          className="underline"
+        >
+         ◀ セクション一覧へ戻る
+        </a>
         </p>
       </main>
     );
@@ -133,9 +142,12 @@ export default function QuestionsOneByOnePage() {
         <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
         <p className="mt-4">このセクションにはまだ問題がありません。</p>
         <p className="mt-6">
-          <a href={`/${projectCode}/sections`} className="underline">
-            ◀ セクション一覧へ戻る
-          </a>
+        <a
+          href={sectionsHref}
+          className="underline"
+        >
+         ◀ セクション一覧へ戻る
+        </a>
         </p>
       </main>
     );
@@ -281,9 +293,12 @@ export default function QuestionsOneByOnePage() {
           </ul>
 
           <p className="mt-6">
-            <a href={`/${projectCode}/sections`} className="underline">
-              ◀ セクション一覧へ戻る
-            </a>
+          <a
+          href={sectionsHref}
+          className="underline"
+        >
+         ◀ セクション一覧へ戻る
+        </a>
           </p>
         </section>
       )}
