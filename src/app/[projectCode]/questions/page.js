@@ -1,211 +1,263 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams, useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
-export default function QuestionsPage() {
-  const { projectCode } = useParams();           // 例: "tcj"
+export default function QuestionsOneByOnePage() {
   const searchParams = useSearchParams();
+  const { projectCode } = useParams();
   const router = useRouter();
 
-  // section / sectionId どちらでも受け取れるように
-  const sectionId =
-    searchParams.get('section') ?? searchParams.get('sectionId');
+  const sectionId = searchParams.get('section');
 
-  // 状態いろいろ
-  const [questions, setQuestions] = useState([]);             // 問題＋選択肢
-  const [selected, setSelected] = useState({});               // { 質問ID: 選んだ選択肢ID }
-  const [result, setResult] = useState(null);                 // { total, correct }
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [questions, setQuestions] = useState([]);
 
-  // 初期ロード：指定セクションの問題＋選択肢を取得
+  const [currentIndex, setCurrentIndex] = useState(0);        // 何問目か
+  const [selectedChoiceId, setSelectedChoiceId] = useState(''); // 現在の回答
+  const [phase, setPhase] = useState('question');             // "question" | "result" | "finish"
+  const [isCorrectCurrent, setIsCorrectCurrent] = useState(null); // true / false / null
+  const [totalCorrect, setTotalCorrect] = useState(0);        // 累計正解数
+
+  // 質問＋選択肢の取得
   useEffect(() => {
     if (!sectionId) {
-      setError('セクションIDが指定されていません。');
+      setErrorMsg('セクションIDが指定されていません。');
       setLoading(false);
       return;
     }
 
-    (async () => {
+    const fetchData = async () => {
       setLoading(true);
-      setError('');
-      setResult(null);
-      setSelected({});
+      setErrorMsg('');
 
-      // questions と choices をまとめて取得
       const { data, error } = await supabase
         .from('questions')
-        .select('id, body, explanation, section_id, choices:choices (id, label, is_correct)')
+        .select(`
+          id,
+          body,
+          explanation,
+          section_id,
+          choices (
+            id,
+            label,
+            is_correct
+          )
+        `)
         .eq('section_id', sectionId)
         .order('id', { ascending: true });
 
       if (error) {
         console.error(error);
-        setError('問題の取得中にエラーが発生しました。');
+        setErrorMsg('問題の読み込みに失敗しました。');
       } else {
-        setQuestions(data ?? []);
+        setQuestions(data || []);
+        setCurrentIndex(0);
+        setSelectedChoiceId('');
+        setPhase('question');
+        setIsCorrectCurrent(null);
+        setTotalCorrect(0);
       }
       setLoading(false);
-    })();
+    };
+
+    fetchData();
   }, [sectionId]);
 
-  // 選択肢を選んだとき
-  function handleSelect(questionId, choiceId) {
-    setSelected((prev) => ({
-      ...prev,
-      [questionId]: choiceId,
-    }));
+  // 解答ログを Supabase に保存（1問ごと）
+  const logAnswer = async (qId, choiceId, isCorrect) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return; // 未ログインなら何もしない
+
+      await supabase.from('answer_logs').insert({
+        user_id: session.user.id,
+        question_id: qId,
+        choice_id: choiceId,
+        is_correct: isCorrect,
+        section_id: sectionId,
+      });
+    } catch (e) {
+      console.error('logAnswer error:', e);
+    }
+  };
+
+  if (!sectionId) {
+    return (
+      <main className="p-6 max-w-3xl mx-auto">
+        <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
+        <p className="mt-4 text-red-600">セクションIDが指定されていません。</p>
+        <p className="mt-6">
+          <a
+            href={`/${projectCode}/sections`}
+            className="underline"
+          >
+            ◀ セクション一覧へ戻る
+          </a>
+        </p>
+      </main>
+    );
   }
 
-  // 「回答を送信」ボタン
-  async function handleSubmit() {
-    if (!questions.length) return;
-  
-    // ① 成績計算
-    let total = questions.length;
-    let correct = 0;
-  
-    questions.forEach((q) => {
-      const chosenId = selected[q.id];
-      const choices = q.choices ?? [];
-      const correctChoice = choices.find((c) => c.is_correct);
-  
-      if (chosenId && correctChoice && chosenId === correctChoice.id) {
-        correct += 1;
-      }
-    });
-  
-    setResult({ total, correct });
-  
-    // ② ログイン中のユーザーを取得
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-  
-    if (userError) {
-      console.error('getUser error', userError);
+  if (loading) {
+    return (
+      <main className="p-6 max-w-3xl mx-auto">
+        <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
+        <p className="mt-4">読み込み中…</p>
+      </main>
+    );
+  }
+
+  if (errorMsg) {
+    return (
+      <main className="p-6 max-w-3xl mx-auto">
+        <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
+        <p className="mt-4 text-red-600">{errorMsg}</p>
+        <p className="mt-6">
+          <a
+            href={`/${projectCode}/sections`}
+            className="underline"
+          >
+            ◀ セクション一覧へ戻る
+          </a>
+        </p>
+      </main>
+    );
+  }
+
+  if (questions.length === 0) {
+    return (
+      <main className="p-6 max-w-3xl mx-auto">
+        <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
+        <p className="mt-4">このセクションにはまだ問題がありません。</p>
+        <p className="mt-6">
+          <a
+            href={`/${projectCode}/sections`}
+            className="underline"
+          >
+            ◀ セクション一覧へ戻る
+          </a>
+        </p>
+      </main>
+    );
+  }
+
+  const currentQuestion = questions[currentIndex];
+  const totalQuestions = questions.length;
+
+  // 「回答を送信」ボタン押下
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedChoiceId) return;
+
+    const choice = currentQuestion.choices.find(
+      (c) => c.id === selectedChoiceId
+    );
+    const isCorrect = !!choice?.is_correct;
+
+    setIsCorrectCurrent(isCorrect);
+    setPhase('result');
+    setTotalCorrect((prev) => prev + (isCorrect ? 1 : 0));
+
+    // ログ保存（await してもいいし、しなくてもOK）
+    await logAnswer(currentQuestion.id, selectedChoiceId, isCorrect);
+  };
+
+  // 「次の問題へ」ボタン押下
+  const handleNext = () => {
+    const nextIndex = currentIndex + 1;
+    if (nextIndex >= totalQuestions) {
+      setPhase('finish');
       return;
     }
-    if (!user) {
-      console.warn('not logged in, skip logging');
-      return;
-    }
-  
-    // ③ insert 用データをまとめる
-    const rows = questions
-      .map((q) => {
-        const chosenId = selected[q.id];
-        if (!chosenId) return null; // 未回答はスキップ
-  
-        const choices = q.choices ?? [];
-        const correctChoice = choices.find((c) => c.is_correct);
-        const isCorrect =
-          correctChoice && chosenId === correctChoice.id;
-  
-        return {
-          user_id: user.id,
-          question_id: q.id,
-          choice_id: chosenId,
-          is_correct: isCorrect,
-          section_id: q.section_id,
-        };
-      })
-      .filter(Boolean); // null を除去
-  
-    if (!rows.length) return;
-  
-    // ④ Supabase に保存
-    const { error: logError } = await supabase
-      .from('answer_logs')
-      .insert(rows);
-  
-    if (logError) {
-      console.error('answer_logs insert error', logError);
-    }
-  }
+    setCurrentIndex(nextIndex);
+    setSelectedChoiceId('');
+    setIsCorrectCurrent(null);
+    setPhase('question');
+  };
 
-  // 戻る
-  function goBack() {
-    router.push(`/${projectCode}/sections?subjectId=${questions[0]?.section_id ?? ''}`);
-  }
-
-  // ここから描画
+  // 表示部分
   return (
     <main className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Questions ({projectCode})</h1>
+      <h1 className="text-2xl font-bold">
+        Questions ({projectCode}) - {currentIndex + 1}問目 / 全{totalQuestions}問
+      </h1>
 
-      {!sectionId && (
-        <p className="text-red-600 mb-4">セクションIDが指定されていません。</p>
+      {/* 質問表示フェーズ */}
+      {phase === 'question' && (
+        <section className="mt-6 border rounded p-4 bg-white">
+          <h2 className="font-semibold">
+            Q{currentIndex + 1}. {currentQuestion.body}
+          </h2>
+          <form onSubmit={handleSubmit} className="mt-4 space-y-2">
+            {currentQuestion.choices?.map((choice) => (
+              <label key={choice.id} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name={`q-${currentQuestion.id}`}
+                  value={choice.id}
+                  checked={selectedChoiceId === choice.id}
+                  onChange={() => setSelectedChoiceId(choice.id)}
+                />
+                <span>{choice.label}</span>
+              </label>
+            ))}
+
+            <button
+              type="submit"
+              disabled={!selectedChoiceId}
+              className="mt-4 rounded bg-black text-white px-4 py-2 disabled:opacity-50"
+            >
+              回答を送信
+            </button>
+          </form>
+        </section>
       )}
 
-      {error && <p className="text-red-600 mb-4">{error}</p>}
-      {loading && <p>読み込み中…</p>}
+      {/* 判定＆解説フェーズ */}
+      {phase === 'result' && (
+        <section className="mt-6 border rounded p-4 bg-white">
+          <h2 className="font-semibold">
+            Q{currentIndex + 1}. {currentQuestion.body}
+          </h2>
 
-      {!loading && !error && questions.length === 0 && (
-        <p>このセクションにはまだ問題がありません。</p>
-      )}
-
-      {/* 問題一覧 */}
-      <div className="space-y-6">
-        {questions.map((q, index) => (
-          <section
-            key={q.id}
-            className="border rounded-md p-4 bg-white shadow-sm"
-          >
-            <h2 className="font-semibold mb-2">
-              Q{index + 1}. {q.body}
-            </h2>
-
-            <ul className="space-y-1 mb-3 list-none pl-0">
-              {(q.choices ?? []).map((ch) => (
-                <li key={ch.id}>
-                  <label className="inline-flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name={`q-${q.id}`}
-                      value={ch.id}
-                      checked={selected[q.id] === ch.id}
-                      onChange={() => handleSelect(q.id, ch.id)}
-                    />
-                    <span>{ch.label}</span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-
-            <p className="text-sm text-gray-600">
-              解説: {q.explanation || '（解説はまだ登録されていません）'}
-            </p>
-          </section>
-        ))}
-      </div>
-
-      {/* 結果表示＋ボタン */}
-      <div className="mt-6 flex flex-col gap-3">
-        <button
-          onClick={handleSubmit}
-          className="inline-block px-4 py-2 rounded bg-black text-white self-start disabled:bg-gray-400"
-          disabled={!questions.length}
-        >
-          回答を送信
-        </button>
-
-        {result && (
-          <p className="mt-2 font-semibold">
-            結果: {result.total}問中 {result.correct}問 正解
+          <p className="mt-4 font-bold">
+            {isCorrectCurrent ? '⭕ 正解！' : '❌ 不正解…'}
           </p>
-        )}
 
-        <button
-          onClick={() => router.back()}
-          className="text-sm text-blue-700 underline mt-4 self-start"
-        >
-          ◀ セクション一覧へ戻る
-        </button>
-      </div>
+          <p className="mt-2 text-sm text-gray-700">
+            解説: {currentQuestion.explanation}
+          </p>
+
+          <button
+            onClick={handleNext}
+            className="mt-4 rounded bg-black text-white px-4 py-2"
+          >
+            {currentIndex + 1 === totalQuestions ? '結果を見る' : '次の問題へ'}
+          </button>
+        </section>
+      )}
+
+      {/* 全問終了フェーズ */}
+      {phase === 'finish' && (
+        <section className="mt-6 border rounded p-4 bg-white">
+          <h2 className="font-semibold">結果</h2>
+          <p className="mt-2">
+            全{totalQuestions}問中 {totalCorrect}問 正解でした。
+          </p>
+
+          <p className="mt-6">
+            <a
+              href={`/${projectCode}/sections`}
+              className="underline"
+            >
+              ◀ セクション一覧へ戻る
+            </a>
+          </p>
+        </section>
+      )}
     </main>
   );
 }
