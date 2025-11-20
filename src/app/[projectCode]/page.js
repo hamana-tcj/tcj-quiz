@@ -146,7 +146,7 @@ export default function Dashboard() {
         )}
 
         {statsError && (
-          <p className="mt-2 text-sm text-red-600">エラー: {statsError}</p>
+           <ErrorBox message="statsError">
         )}
 
         {!statsLoading && !statsError && (

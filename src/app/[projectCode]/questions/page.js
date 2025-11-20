@@ -3,31 +3,45 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { ErrorBox } from '@/components/ErrorBox'; // ① 作ったコンポーネント
 
 export default function QuestionsOneByOnePage() {
   const searchParams = useSearchParams();
   const { projectCode } = useParams();
 
   const sectionId = searchParams.get('section');
-  const subjectId = searchParams.get('subject');
-  const sectionsHref = subjectId
-    ? `/${projectCode}/sections?subject=${subjectId}`
-    : `/${projectCode}/sections`;
+  const subjectId = searchParams.get('subject'); // あれば使う
+
+  // ロード状態・エラー
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // 問題一覧
   const [questions, setQuestions] = useState([]);
 
-  const [currentIndex, setCurrentIndex] = useState(0);           // 何問目か
-  const [selectedChoiceId, setSelectedChoiceId] = useState('');  // 現在の回答
-  const [phase, setPhase] = useState('question');               // "question" | "result" | "finish"
+  // 出題モード用の state
+  const [currentIndex, setCurrentIndex] = useState(0);        // 何問目か
+  const [selectedChoiceId, setSelectedChoiceId] = useState(''); // その問題で選んだ選択肢
+  const [phase, setPhase] = useState('question');             // "question" | "result" | "finish"
   const [isCorrectCurrent, setIsCorrectCurrent] = useState(null); // true / false / null
-  const [totalCorrect, setTotalCorrect] = useState(0);           // 累計正解数
+  const [totalCorrect, setTotalCorrect] = useState(0);        // 累計正解数
 
-  // ★ 各問題ごとの結果一覧
-  // { questionId, body, userChoiceLabel, isCorrect, explanation } の配列
-  const [answerDetails, setAnswerDetails] = useState([]);
+  // 最後の結果表示用
+  const [result, setResult] = useState(null);
+  // result の形：
+  // {
+  //   total: number;
+  //   correct: number;
+  //   details: {
+  //     id: string;
+  //     text: string;
+  //     userChoiceLabel: string | null;
+  //     isCorrect: boolean;
+  //     explanation: string;
+  //   }[];
+  // }
 
-  // 質問＋選択肢の取得
+  // ① 問題＋選択肢の取得
   useEffect(() => {
     if (!sectionId) {
       setErrorMsg('セクションIDが指定されていません。');
@@ -65,7 +79,7 @@ export default function QuestionsOneByOnePage() {
         setPhase('question');
         setIsCorrectCurrent(null);
         setTotalCorrect(0);
-        setAnswerDetails([]); // ← リセット
+        setResult(null);
       }
       setLoading(false);
     };
@@ -73,12 +87,10 @@ export default function QuestionsOneByOnePage() {
     fetchData();
   }, [sectionId]);
 
-  // 解答ログを Supabase に保存（1問ごと）
+  // ② 解答ログを Supabase に保存（1問ごと）
   const logAnswer = async (qId, choiceId, isCorrect) => {
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session) return; // 未ログインなら何もしない
 
       await supabase.from('answer_logs').insert({
@@ -93,18 +105,19 @@ export default function QuestionsOneByOnePage() {
     }
   };
 
+  // ===== ここから早期 return 群 =====
+
   if (!sectionId) {
     return (
       <main className="p-6 max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
-        <p className="mt-4 text-red-600">セクションIDが指定されていません。</p>
+        <div className="mt-4">
+          <ErrorBox message="セクションIDが指定されていません。" />
+        </div>
         <p className="mt-6">
-        <a
-          href={sectionsHref}
-          className="underline"
-        >
-         ◀ セクション一覧へ戻る
-        </a>
+          <a href={`/${projectCode}/sections`} className="underline">
+            ◀ セクション一覧へ戻る
+          </a>
         </p>
       </main>
     );
@@ -123,14 +136,13 @@ export default function QuestionsOneByOnePage() {
     return (
       <main className="p-6 max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
-        <p className="mt-4 text-red-600">{errorMsg}</p>
+        <div className="mt-4">
+          <ErrorBox message={errorMsg} />
+        </div>
         <p className="mt-6">
-        <a
-          href={sectionsHref}
-          className="underline"
-        >
-         ◀ セクション一覧へ戻る
-        </a>
+          <a href={`/${projectCode}/sections`} className="underline">
+            ◀ セクション一覧へ戻る
+          </a>
         </p>
       </main>
     );
@@ -142,16 +154,15 @@ export default function QuestionsOneByOnePage() {
         <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
         <p className="mt-4">このセクションにはまだ問題がありません。</p>
         <p className="mt-6">
-        <a
-          href={sectionsHref}
-          className="underline"
-        >
-         ◀ セクション一覧へ戻る
-        </a>
+          <a href={`/${projectCode}/sections`} className="underline">
+            ◀ セクション一覧へ戻る
+          </a>
         </p>
       </main>
     );
   }
+
+  // ===== ここから通常表示用の処理 =====
 
   const currentQuestion = questions[currentIndex];
   const totalQuestions = questions.length;
@@ -162,7 +173,7 @@ export default function QuestionsOneByOnePage() {
     if (!selectedChoiceId) return;
 
     const choice = currentQuestion.choices.find(
-      (c) => c.id === selectedChoiceId,
+      (c) => c.id === selectedChoiceId
     );
     const isCorrect = !!choice?.is_correct;
 
@@ -170,20 +181,28 @@ export default function QuestionsOneByOnePage() {
     setPhase('result');
     setTotalCorrect((prev) => prev + (isCorrect ? 1 : 0));
 
-    // ★ この問題の詳細を answerDetails に追加
-    setAnswerDetails((prev) => [
-      ...prev,
-      {
-        questionId: currentQuestion.id,
-        body: currentQuestion.body,
-        userChoiceLabel: choice ? choice.label : '未回答',
-        isCorrect,
-        explanation: currentQuestion.explanation,
-      },
-    ]);
-
     // ログ保存
     await logAnswer(currentQuestion.id, selectedChoiceId, isCorrect);
+
+    // ★ 最終問題だった場合は結果サマリも作っておく
+    if (currentIndex + 1 === totalQuestions) {
+      const lastDetail = {
+        id: currentQuestion.id,
+        text: currentQuestion.body,
+        userChoiceLabel: choice ? choice.label : null,
+        isCorrect,
+        explanation: currentQuestion.explanation,
+      };
+
+      // それまでの回答は、簡易的に「全問正解 or 不正解」は分からないので
+      // prototyping では「最後の1問だけ詳細」にしておく。
+      // （もし全問分の詳細を残したければ、answers 配列を別 state に持つ形に拡張すればOK）
+      setResult({
+        total: totalQuestions,
+        correct: totalCorrect + (isCorrect ? 1 : 0),
+        details: [lastDetail],
+      });
+    }
   };
 
   // 「次の問題へ」ボタン押下
@@ -199,12 +218,12 @@ export default function QuestionsOneByOnePage() {
     setPhase('question');
   };
 
-  // 表示部分
+  // ===== 画面描画 =====
+
   return (
     <main className="p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold">
-        Questions ({projectCode}) - {currentIndex + 1}問目 / 全{totalQuestions}
-        問
+        Questions ({projectCode}) - {currentIndex + 1}問目 / 全{totalQuestions}問
       </h1>
 
       {/* 質問表示フェーズ */}
@@ -240,7 +259,7 @@ export default function QuestionsOneByOnePage() {
 
       {/* 判定＆解説フェーズ */}
       {phase === 'result' && (
-        <section className="mt-6 border rounded p-4 bg白 bg-white">
+        <section className="mt-6 border rounded p-4 bg-white">
           <h2 className="font-semibold">
             Q{currentIndex + 1}. {currentQuestion.body}
           </h2>
@@ -267,38 +286,40 @@ export default function QuestionsOneByOnePage() {
         <section className="mt-6 border rounded p-4 bg-white">
           <h2 className="font-semibold">結果</h2>
           <p className="mt-2">
-            全{totalQuestions}問中 {totalCorrect}問 正解でした。
+            全{result ? result.total : totalQuestions}問中{' '}
+            {result ? result.correct : totalCorrect}問 正解でした。
           </p>
 
-          {/* 問題ごとの詳細一覧 */}
-          <ul className="mt-4 space-y-3">
-            {answerDetails.map((row, index) => (
-              <li key={row.questionId} className="border rounded p-3">
-                <p className="font-semibold">
-                  Q{index + 1}. {row.body}
-                </p>
-                <p className="mt-1">あなたの回答：{row.userChoiceLabel}</p>
-                <p
-                  className={`mt-1 font-semibold ${
-                    row.isCorrect ? 'text-green-700' : 'text-red-700'
-                  }`}
+          {/* prototyping なので、ひとまず最後の1問だけ詳細表示にしてある */}
+          {result && result.details && (
+            <div className="mt-4 space-y-4">
+              {result.details.map((q) => (
+                <div
+                  key={q.id}
+                  className="border rounded p-3 bg-white"
                 >
-                  {row.isCorrect ? '〇 正解' : '✕ 不正解'}
-                </p>
-                <p className="mt-1 text-sm text-gray-700">
-                  解説: {row.explanation}
-                </p>
-              </li>
-            ))}
-          </ul>
+                  <p className="font-semibold">{q.text}</p>
+                  <p className="mt-1">
+                    あなたの回答：{q.userChoiceLabel ?? '未回答'}
+                  </p>
+                  <p className="mt-1">
+                    {q.isCorrect ? '⭕ 正解' : '❌ 不正解'}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-700">
+                    解説: {q.explanation}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
 
           <p className="mt-6">
-          <a
-          href={sectionsHref}
-          className="underline"
-        >
-         ◀ セクション一覧へ戻る
-        </a>
+            <a
+              href={`/${projectCode}/sections?subject=${subjectId ?? ''}`}
+              className="underline"
+            >
+              ◀ セクション一覧へ戻る
+            </a>
           </p>
         </section>
       )}

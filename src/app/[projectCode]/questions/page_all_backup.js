@@ -138,10 +138,10 @@ export default function QuestionsPage() {
       <h1 className="text-2xl font-bold mb-4">Questions ({projectCode})</h1>
 
       {!sectionId && (
-        <p className="text-red-600 mb-4">セクションIDが指定されていません。</p>
+        <ErrorBox message="セクションIDが指定されていません。">
       )}
 
-      {error && <p className="text-red-600 mb-4">{error}</p>}
+      {error && <ErrorBox message="error" />
       {loading && <p>読み込み中…</p>}
 
       {!loading && !error && questions.length === 0 && (
