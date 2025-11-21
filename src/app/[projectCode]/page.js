@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import ErrorBox from '@/components/ErrorBox';
 
 export default function Dashboard() {
   const { projectCode } = useParams(); // 例: "tcj"
@@ -145,9 +146,7 @@ export default function Dashboard() {
           <p className="mt-2 text-sm text-gray-500">読み込み中…</p>
         )}
 
-        {statsError && (
-           <ErrorBox message="statsError">
-        )}
+        {statsError && <ErrorBox message={statsError} />}
 
         {!statsLoading && !statsError && (
           <>

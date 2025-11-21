@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { ErrorBox } from '@/components/ErrorBox'; // ① 作ったコンポーネント
+import  ErrorBox  from '@/components/ErrorBox'; // ① 作ったコンポーネント
 
 export default function QuestionsOneByOnePage() {
   const searchParams = useSearchParams();
@@ -26,19 +26,15 @@ export default function QuestionsOneByOnePage() {
   const [isCorrectCurrent, setIsCorrectCurrent] = useState(null); // true / false / null
   const [totalCorrect, setTotalCorrect] = useState(0);        // 累計正解数
 
-  // 最後の結果表示用
-  const [result, setResult] = useState(null);
-  // result の形：
+  // 全問の回答詳細を保存する配列
+  const [answerDetails, setAnswerDetails] = useState([]);
+  // answerDetails の各要素の形：
   // {
-  //   total: number;
-  //   correct: number;
-  //   details: {
-  //     id: string;
-  //     text: string;
-  //     userChoiceLabel: string | null;
-  //     isCorrect: boolean;
-  //     explanation: string;
-  //   }[];
+  //   id: string;
+  //   text: string;
+  //   userChoiceLabel: string | null;
+  //   isCorrect: boolean;
+  //   explanation: string;
   // }
 
   // ① 問題＋選択肢の取得
@@ -79,7 +75,7 @@ export default function QuestionsOneByOnePage() {
         setPhase('question');
         setIsCorrectCurrent(null);
         setTotalCorrect(0);
-        setResult(null);
+        setAnswerDetails([]);
       }
       setLoading(false);
     };
@@ -179,30 +175,22 @@ export default function QuestionsOneByOnePage() {
 
     setIsCorrectCurrent(isCorrect);
     setPhase('result');
-    setTotalCorrect((prev) => prev + (isCorrect ? 1 : 0));
+    const newTotalCorrect = totalCorrect + (isCorrect ? 1 : 0);
+    setTotalCorrect(newTotalCorrect);
+
+    // 現在の問題の回答詳細を保存
+    const currentDetail = {
+      id: currentQuestion.id,
+      text: currentQuestion.body,
+      userChoiceLabel: choice ? choice.label : null,
+      isCorrect,
+      explanation: currentQuestion.explanation,
+    };
+    
+    setAnswerDetails((prev) => [...prev, currentDetail]);
 
     // ログ保存
     await logAnswer(currentQuestion.id, selectedChoiceId, isCorrect);
-
-    // ★ 最終問題だった場合は結果サマリも作っておく
-    if (currentIndex + 1 === totalQuestions) {
-      const lastDetail = {
-        id: currentQuestion.id,
-        text: currentQuestion.body,
-        userChoiceLabel: choice ? choice.label : null,
-        isCorrect,
-        explanation: currentQuestion.explanation,
-      };
-
-      // それまでの回答は、簡易的に「全問正解 or 不正解」は分からないので
-      // prototyping では「最後の1問だけ詳細」にしておく。
-      // （もし全問分の詳細を残したければ、answers 配列を別 state に持つ形に拡張すればOK）
-      setResult({
-        total: totalQuestions,
-        correct: totalCorrect + (isCorrect ? 1 : 0),
-        details: [lastDetail],
-      });
-    }
   };
 
   // 「次の問題へ」ボタン押下
@@ -286,31 +274,31 @@ export default function QuestionsOneByOnePage() {
         <section className="mt-6 border rounded p-4 bg-white">
           <h2 className="font-semibold">結果</h2>
           <p className="mt-2">
-            全{result ? result.total : totalQuestions}問中{' '}
-            {result ? result.correct : totalCorrect}問 正解でした。
+            全{totalQuestions}問中 {totalCorrect}問 正解でした。
           </p>
 
-          {/* prototyping なので、ひとまず最後の1問だけ詳細表示にしてある */}
-          {result && result.details && (
-            <div className="mt-4 space-y-4">
-              {result.details.map((q) => (
-                <div
-                  key={q.id}
-                  className="border rounded p-3 bg-white"
-                >
-                  <p className="font-semibold">{q.text}</p>
-                  <p className="mt-1">
-                    あなたの回答：{q.userChoiceLabel ?? '未回答'}
+          {/* 問題ごとの詳細一覧 */}
+          {answerDetails.length > 0 && (
+            <ul className="mt-4 space-y-3">
+              {answerDetails.map((row, index) => (
+                <li key={row.id} className="border rounded p-3">
+                  <p className="font-semibold">
+                    Q{index + 1}. {row.text}
                   </p>
-                  <p className="mt-1">
-                    {q.isCorrect ? '⭕ 正解' : '❌ 不正解'}
+                  <p className="mt-1">あなたの回答：{row.userChoiceLabel ?? '未回答'}</p>
+                  <p
+                    className={`mt-1 font-semibold ${
+                      row.isCorrect ? 'text-green-700' : 'text-red-700'
+                    }`}
+                  >
+                    {row.isCorrect ? '〇 正解' : '✕ 不正解'}
                   </p>
                   <p className="mt-1 text-sm text-gray-700">
-                    解説: {q.explanation}
+                    解説: {row.explanation}
                   </p>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
 
           <p className="mt-6">

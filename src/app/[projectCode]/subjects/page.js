@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import ErrorBox from '@/components/ErrorBox';
 
 export default function SubjectsPage() {
   const { projectCode } = useParams();

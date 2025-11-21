@@ -1,6 +1,6 @@
 'use client';
 
-export default function ErrorBox({ title = 'エラー', message, children }) {
+export default function ErrorBox({ message }) {
   if (!message) return null;
 
   return (
