@@ -3,7 +3,16 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import  ErrorBox  from '@/components/ErrorBox'; // ① 作ったコンポーネント
+import ErrorBox from '@/components/ErrorBox'; // ① 作ったコンポーネント
+
+function shuffleArray(items = []) {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
 export default function QuestionsOneByOnePage() {
   const searchParams = useSearchParams();
@@ -69,7 +78,11 @@ export default function QuestionsOneByOnePage() {
         console.error(error);
         setErrorMsg('問題の読み込みに失敗しました。');
       } else {
-        setQuestions(data || []);
+        const shuffledQuestions = (data || []).map((q) => ({
+          ...q,
+          choices: shuffleArray(q.choices || []),
+        }));
+        setQuestions(shuffledQuestions);
         setCurrentIndex(0);
         setSelectedChoiceId('');
         setPhase('question');
