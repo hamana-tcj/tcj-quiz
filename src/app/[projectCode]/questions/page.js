@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useSearchParams, useParams } from 'next/navigation';
+import { useEffect, useState, useMemo } from 'react';
+import { useSearchParams, useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import ErrorBox from '@/components/ErrorBox'; // ① 作ったコンポーネント
 
@@ -17,6 +17,7 @@ function shuffleArray(items = []) {
 export default function QuestionsOneByOnePage() {
   const searchParams = useSearchParams();
   const { projectCode } = useParams();
+  const router = useRouter();
 
   const sectionId = searchParams.get('section');
   const subjectId = searchParams.get('subject'); // あれば使う
@@ -27,6 +28,7 @@ export default function QuestionsOneByOnePage() {
 
   // 問題一覧
   const [questions, setQuestions] = useState([]);
+  const [sectionsInSubject, setSectionsInSubject] = useState([]);
 
   // 出題モード用の state
   const [currentIndex, setCurrentIndex] = useState(0);        // 何問目か
@@ -96,6 +98,27 @@ export default function QuestionsOneByOnePage() {
     fetchData();
   }, [sectionId]);
 
+  useEffect(() => {
+    if (!subjectId) {
+      setSectionsInSubject([]);
+      return;
+    }
+
+    const fetchSections = async () => {
+      const { data, error } = await supabase
+        .from('sections')
+        .select('id, name')
+        .eq('subject_id', subjectId)
+        .order('name', { ascending: true });
+
+      if (!error && data) {
+        setSectionsInSubject(data);
+      }
+    };
+
+    fetchSections();
+  }, [subjectId]);
+
   // ② 解答ログを Supabase に保存（1問ごと）
   const logAnswer = async (qId, choiceId, isCorrect) => {
     try {
@@ -113,6 +136,23 @@ export default function QuestionsOneByOnePage() {
       console.error('logAnswer error:', e);
     }
   };
+
+  // ===== 通常表示用の基本値（Hooks は早期 return より前で宣言） =====
+  const totalQuestions = questions.length;
+  const currentQuestion = questions[currentIndex] ?? null;
+
+  const nextSectionId = useMemo(() => {
+    if (!subjectId || sectionsInSubject.length === 0) return null;
+
+    const index = sectionsInSubject.findIndex(
+      (sec) => String(sec.id) === String(sectionId)
+    );
+    if (index === -1) {
+      return sectionsInSubject[0]?.id ?? null;
+    }
+    const nextIndex = (index + 1) % sectionsInSubject.length;
+    return sectionsInSubject[nextIndex]?.id ?? null;
+  }, [sectionId, subjectId, sectionsInSubject]);
 
   // ===== ここから早期 return 群 =====
 
@@ -173,9 +213,6 @@ export default function QuestionsOneByOnePage() {
 
   // ===== ここから通常表示用の処理 =====
 
-  const currentQuestion = questions[currentIndex];
-  const totalQuestions = questions.length;
-
   // 「回答を送信」ボタン押下
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -206,6 +243,14 @@ export default function QuestionsOneByOnePage() {
     await logAnswer(currentQuestion.id, selectedChoiceId, isCorrect);
   };
 
+  const handleGoNextSection = () => {
+    if (!nextSectionId) return;
+    const url = `/${projectCode}/questions?section=${nextSectionId}${
+      subjectId ? `&subject=${subjectId}` : ''
+    }`;
+    router.push(url);
+  };
+
   // 「次の問題へ」ボタン押下
   const handleNext = () => {
     const nextIndex = currentIndex + 1;
@@ -234,7 +279,9 @@ export default function QuestionsOneByOnePage() {
             Q{currentIndex + 1}. {currentQuestion.body}
           </h2>
           <form onSubmit={handleSubmit} className="mt-4 space-y-2">
-            {currentQuestion.choices?.map((choice) => (
+            {currentQuestion.choices?.map((choice, index) => {
+              const labelPrefix = String.fromCharCode(65 + index); // A, B, C, ...
+              return (
               <label key={choice.id} className="flex items-center gap-2">
                 <input
                   type="radio"
@@ -243,9 +290,11 @@ export default function QuestionsOneByOnePage() {
                   checked={selectedChoiceId === choice.id}
                   onChange={() => setSelectedChoiceId(choice.id)}
                 />
-                <span>{choice.label}</span>
+                <span>
+                  {labelPrefix}. {choice.label}
+                </span>
               </label>
-            ))}
+            )})}
 
             <button
               type="submit"
@@ -322,6 +371,13 @@ export default function QuestionsOneByOnePage() {
               ◀ セクション一覧へ戻る
             </a>
           </p>
+          {nextSectionId && (
+            <p className="mt-2">
+              <button onClick={handleGoNextSection} className="underline">
+                ▶ 次のセクションへ
+              </button>
+            </p>
+          )}
         </section>
       )}
     </main>
