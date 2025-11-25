@@ -33,6 +33,7 @@ export default function QuestionsOneByOnePage() {
   // 問題一覧
   const [questions, setQuestions] = useState([]);
   const [sectionsInSubject, setSectionsInSubject] = useState([]);
+  const [sectionName, setSectionName] = useState('');
 
   // 出題モード用の state
   const [currentIndex, setCurrentIndex] = useState(0);        // 何問目か
@@ -63,6 +64,7 @@ export default function QuestionsOneByOnePage() {
 
     const fetchData = async () => {
       setLoading(true);
+      setSectionName('');
       setErrorMsg('');
 
       const { data, error } = await supabase
@@ -96,6 +98,17 @@ export default function QuestionsOneByOnePage() {
         setIsCorrectCurrent(null);
         setTotalCorrect(0);
         setAnswerDetails([]);
+        const { data: sectionData, error: sectionError } = await supabase
+          .from('sections')
+          .select('name')
+          .eq('id', sectionId)
+          .maybeSingle();
+
+        if (!sectionError && sectionData?.name) {
+          setSectionName(sectionData.name);
+        } else {
+          setSectionName('');
+        }
       }
       setLoading(false);
     };
@@ -169,6 +182,8 @@ export default function QuestionsOneByOnePage() {
         }`
       : null;
 
+  const headingTitle = sectionName || `Questions (${projectCode})`;
+
   // ===== ここから早期 return 群 =====
 
   if (!sectionId) {
@@ -190,7 +205,7 @@ export default function QuestionsOneByOnePage() {
   if (loading) {
     return (
       <main className="p-6 max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
+        <h1 className="text-2xl font-bold">{headingTitle}</h1>
         <p className="mt-4">読み込み中…</p>
       </main>
     );
@@ -199,7 +214,7 @@ export default function QuestionsOneByOnePage() {
   if (errorMsg) {
     return (
       <main className="p-6 max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
+        <h1 className="text-2xl font-bold">{headingTitle}</h1>
         <div className="mt-4">
           <ErrorBox message={errorMsg} />
         </div>
@@ -215,7 +230,7 @@ export default function QuestionsOneByOnePage() {
   if (questions.length === 0) {
     return (
       <main className="p-6 max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold">Questions ({projectCode})</h1>
+        <h1 className="text-2xl font-bold">{headingTitle}</h1>
         <p className="mt-4">このセクションにはまだ問題がありません。</p>
         <p className="mt-6">
           <a href={`/${projectCode}/sections`} className="underline">
@@ -292,7 +307,7 @@ export default function QuestionsOneByOnePage() {
   return (
     <main className="p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold">
-        Questions ({projectCode}) - {currentIndex + 1}問目 / 全{totalQuestions}問
+        {headingTitle} - {currentIndex + 1}問目 / 全{totalQuestions}問
       </h1>
 
       {/* 質問表示フェーズ */}
