@@ -12,7 +12,7 @@ export default function Dashboard() {
   const [user, setUser] = useState(null);
 
   // 学習状況用の state
-  const [stats, setStats] = useState([]); // [{ sectionId, name, total, answered, correct }, ...]
+  const [stats, setStats] = useState([]); // [{ subjectId, name, total, answered, correct }, ...]
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState('');
 
@@ -22,22 +22,30 @@ export default function Dashboard() {
     setStatsError('');
 
     try {
-      // 1) セクション一覧
+      // 1) 科目一覧
+      const { data: subjects, error: subjErr } = await supabase
+        .from('subjects')
+        .select('id, name')
+        .order('name', { ascending: true });
+
+      if (subjErr) throw subjErr;
+
+      // 2) セクション一覧（科目紐付け用）
       const { data: sections, error: secErr } = await supabase
         .from('sections')
-        .select('id, name')
+        .select('id, name, subject_id')
         .order('name', { ascending: true });
 
       if (secErr) throw secErr;
 
-      // 2) 質問一覧（セクションごとの総問数を出したい）
+      // 3) 質問一覧（セクションごとの総問数を出したい）
       const { data: questions, error: qErr } = await supabase
         .from('questions')
         .select('id, section_id');
 
       if (qErr) throw qErr;
 
-      // 3) 回答ログ（このユーザー分だけ）
+      // 4) 回答ログ（このユーザー分だけ）
       const { data: logs, error: logErr } = await supabase
         .from('answer_logs')
         .select('section_id, is_correct')
@@ -47,30 +55,39 @@ export default function Dashboard() {
 
       // --- 集計処理 ---
 
-      // セクションごとの総問数
-      const totalBySection = {};
-      questions.forEach((q) => {
-        totalBySection[q.section_id] = (totalBySection[q.section_id] || 0) + 1;
+      // セクション → 科目IDのマップ
+      const sectionToSubject = {};
+      sections.forEach((sec) => {
+        sectionToSubject[sec.id] = sec.subject_id;
       });
 
-      // セクションごとの回答数・正解数
-      const answeredBySection = {};
-      const correctBySection = {};
+      // 科目ごとの総問数
+      const totalBySubject = {};
+      questions.forEach((q) => {
+        const subjectId = sectionToSubject[q.section_id];
+        if (!subjectId) return;
+        totalBySubject[subjectId] = (totalBySubject[subjectId] || 0) + 1;
+      });
+
+      // 科目ごとの回答数・正解数
+      const answeredBySubject = {};
+      const correctBySubject = {};
       logs.forEach((log) => {
-        const sid = log.section_id;
-        answeredBySection[sid] = (answeredBySection[sid] || 0) + 1;
+        const subjectId = sectionToSubject[log.section_id];
+        if (!subjectId) return;
+        answeredBySubject[subjectId] = (answeredBySubject[subjectId] || 0) + 1;
         if (log.is_correct) {
-          correctBySection[sid] = (correctBySection[sid] || 0) + 1;
+          correctBySubject[subjectId] = (correctBySubject[subjectId] || 0) + 1;
         }
       });
 
-      // セクションマスタにまとめて結合
-      const merged = sections.map((sec) => ({
-        sectionId: sec.id,
-        name: sec.name,
-        total: totalBySection[sec.id] || 0,
-        answered: answeredBySection[sec.id] || 0,
-        correct: correctBySection[sec.id] || 0,
+      // 科目マスタにまとめて結合
+      const merged = subjects.map((subject) => ({
+        subjectId: subject.id,
+        name: subject.name,
+        total: totalBySubject[subject.id] || 0,
+        answered: answeredBySubject[subject.id] || 0,
+        correct: correctBySubject[subject.id] || 0,
       }));
 
       setStats(merged);
@@ -152,19 +169,19 @@ export default function Dashboard() {
           <>
             {stats.length === 0 ? (
               <p className="mt-2 text-sm">
-                まだ回答履歴がありません。セクションを選んで、最初の問題に挑戦してみましょう。
+                まだ回答履歴がありません。科目からセクションを選んで最初の問題に挑戦してみましょう。
               </p>
             ) : (
               <ul className="mt-3 space-y-3">
                 {stats.map((row) => (
                   <li
-                    key={row.sectionId}
+                    key={row.subjectId}
                     className="border rounded px-4 py-3"
                   >
                     <div className="font-medium">{row.name}</div>
                     {row.total === 0 ? (
                       <p className="text-sm text-gray-600 mt-1">
-                        このセクションにはまだ問題が登録されていません。
+                        この科目にはまだ問題が登録されていません。
                       </p>
                     ) : (
                       <p className="text-sm text-gray-700 mt-1">
