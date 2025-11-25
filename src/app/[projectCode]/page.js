@@ -22,6 +22,22 @@ export default function Dashboard() {
     setStatsError('');
 
     try {
+      const PAGE_SIZE = 1000;
+      async function fetchAllRows(makeQuery) {
+        let from = 0;
+        const allRows = [];
+        while (true) {
+          const { data, error } = await makeQuery(from, from + PAGE_SIZE - 1);
+          if (error) throw error;
+          if (data && data.length > 0) {
+            allRows.push(...data);
+          }
+          if (!data || data.length < PAGE_SIZE) break;
+          from += PAGE_SIZE;
+        }
+        return allRows;
+      }
+
       // 1) 科目一覧
       const { data: subjects, error: subjErr } = await supabase
         .from('subjects')
@@ -39,19 +55,18 @@ export default function Dashboard() {
       if (secErr) throw secErr;
 
       // 3) 質問一覧（セクションごとの総問数を出したい）
-      const { data: questions, error: qErr } = await supabase
-        .from('questions')
-        .select('id, section_id');
-
-      if (qErr) throw qErr;
+      const questions = await fetchAllRows((from, to) =>
+        supabase.from('questions').select('id, section_id').range(from, to)
+      );
 
       // 4) 回答ログ（このユーザー分だけ）
-      const { data: logs, error: logErr } = await supabase
-        .from('answer_logs')
-        .select('section_id, is_correct')
-        .eq('user_id', userId);
-
-      if (logErr) throw logErr;
+      const logs = await fetchAllRows((from, to) =>
+        supabase
+          .from('answer_logs')
+          .select('section_id, is_correct')
+          .eq('user_id', userId)
+          .range(from, to)
+      );
 
       // --- 集計処理 ---
 
