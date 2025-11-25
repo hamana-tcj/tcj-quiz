@@ -14,6 +14,10 @@ function shuffleArray(items = []) {
   return arr;
 }
 
+function getChoicePrefix(index) {
+  return String.fromCharCode(65 + index); // A, B, C...
+}
+
 export default function QuestionsOneByOnePage() {
   const searchParams = useSearchParams();
   const { projectCode } = useParams();
@@ -44,6 +48,7 @@ export default function QuestionsOneByOnePage() {
   //   id: string;
   //   text: string;
   //   userChoiceLabel: string | null;
+  //   correctChoiceLabel: string | null;
   //   isCorrect: boolean;
   //   explanation: string;
   // }
@@ -154,6 +159,16 @@ export default function QuestionsOneByOnePage() {
     return sectionsInSubject[nextIndex]?.id ?? null;
   }, [sectionId, subjectId, sectionsInSubject]);
 
+  const correctChoiceIndex = currentQuestion?.choices?.findIndex(
+    (c) => c.is_correct
+  );
+  const correctChoiceLabel =
+    correctChoiceIndex >= 0
+      ? `${getChoicePrefix(correctChoiceIndex)}. ${
+          currentQuestion.choices[correctChoiceIndex].label
+        }`
+      : null;
+
   // ===== ここから早期 return 群 =====
 
   if (!sectionId) {
@@ -221,6 +236,13 @@ export default function QuestionsOneByOnePage() {
     const choice = currentQuestion.choices.find(
       (c) => c.id === selectedChoiceId
     );
+    const userChoiceIndex = currentQuestion.choices.findIndex(
+      (c) => c.id === selectedChoiceId
+    );
+    const userChoiceLabel =
+      userChoiceIndex >= 0
+        ? `${getChoicePrefix(userChoiceIndex)}. ${choice?.label ?? ''}`
+        : choice?.label ?? null;
     const isCorrect = !!choice?.is_correct;
 
     setIsCorrectCurrent(isCorrect);
@@ -232,7 +254,8 @@ export default function QuestionsOneByOnePage() {
     const currentDetail = {
       id: currentQuestion.id,
       text: currentQuestion.body,
-      userChoiceLabel: choice ? choice.label : null,
+      userChoiceLabel,
+      correctChoiceLabel,
       isCorrect,
       explanation: currentQuestion.explanation,
     };
@@ -279,9 +302,7 @@ export default function QuestionsOneByOnePage() {
             Q{currentIndex + 1}. {currentQuestion.body}
           </h2>
           <form onSubmit={handleSubmit} className="mt-4 space-y-2">
-            {currentQuestion.choices?.map((choice, index) => {
-              const labelPrefix = String.fromCharCode(65 + index); // A, B, C, ...
-              return (
+            {currentQuestion.choices?.map((choice, index) => (
               <label key={choice.id} className="flex items-center gap-2">
                 <input
                   type="radio"
@@ -291,10 +312,10 @@ export default function QuestionsOneByOnePage() {
                   onChange={() => setSelectedChoiceId(choice.id)}
                 />
                 <span>
-                  {labelPrefix}. {choice.label}
+                  {getChoicePrefix(index)}. {choice.label}
                 </span>
               </label>
-            )})}
+            ))}
 
             <button
               type="submit"
@@ -321,6 +342,11 @@ export default function QuestionsOneByOnePage() {
           <p className="mt-2 text-sm text-gray-700">
             解説: {currentQuestion.explanation}
           </p>
+          {!isCorrectCurrent && correctChoiceLabel && (
+            <p className="mt-2 text-sm text-gray-700">
+              正解: {correctChoiceLabel}
+            </p>
+          )}
 
           <button
             onClick={handleNext}
@@ -355,6 +381,11 @@ export default function QuestionsOneByOnePage() {
                   >
                     {row.isCorrect ? '〇 正解' : '✕ 不正解'}
                   </p>
+                  {!row.isCorrect && row.correctChoiceLabel && (
+                    <p className="mt-1 text-sm text-gray-700">
+                      正解: {row.correctChoiceLabel}
+                    </p>
+                  )}
                   <p className="mt-1 text-sm text-gray-700">
                     解説: {row.explanation}
                   </p>
