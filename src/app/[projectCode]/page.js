@@ -63,15 +63,16 @@ export default function Dashboard() {
       const logs = await fetchAllRows((from, to) =>
         supabase
           .from('answer_logs')
-          .select('section_id, is_correct')
+          .select('section_id, question_id, is_correct')
           .eq('user_id', userId)
           .range(from, to)
       );
 
       // --- 集計処理 ---
 
-      // セクション → 科目IDのマップ
+      // セクション／質問 → 科目IDのマップ
       const sectionToSubject = {};
+      const questionToSubject = {};
       sections.forEach((sec) => {
         sectionToSubject[sec.id] = sec.subject_id;
       });
@@ -81,18 +82,31 @@ export default function Dashboard() {
       questions.forEach((q) => {
         const subjectId = sectionToSubject[q.section_id];
         if (!subjectId) return;
+        questionToSubject[q.id] = subjectId;
         totalBySubject[subjectId] = (totalBySubject[subjectId] || 0) + 1;
       });
 
       // 科目ごとの回答数・正解数
       const answeredBySubject = {};
       const correctBySubject = {};
+      const answeredQuestionSet = new Set();
+      const correctQuestionSet = new Set();
       logs.forEach((log) => {
-        const subjectId = sectionToSubject[log.section_id];
-        if (!subjectId) return;
-        answeredBySubject[subjectId] = (answeredBySubject[subjectId] || 0) + 1;
-        if (log.is_correct) {
-          correctBySubject[subjectId] = (correctBySubject[subjectId] || 0) + 1;
+        const subjectId =
+          questionToSubject[log.question_id] ??
+          sectionToSubject[log.section_id];
+        if (!subjectId || !log.question_id) return;
+
+        if (!answeredQuestionSet.has(log.question_id)) {
+          answeredQuestionSet.add(log.question_id);
+          answeredBySubject[subjectId] =
+            (answeredBySubject[subjectId] || 0) + 1;
+        }
+
+        if (log.is_correct && !correctQuestionSet.has(log.question_id)) {
+          correctQuestionSet.add(log.question_id);
+          correctBySubject[subjectId] =
+            (correctBySubject[subjectId] || 0) + 1;
         }
       });
 
