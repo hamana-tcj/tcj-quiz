@@ -176,7 +176,7 @@ export default function SubjectsPage() {
           </button>
         </div>
 
-      {msg && <p className="mt-4 text-sm">{msg}</p>}
+      {msg && <p className="mt-4 text-sm" style={{ color: '#7a797a' }}>{msg}</p>}
 
       <div className="mt-4 space-y-3">
         {subjects.map((s) => {
@@ -187,16 +187,16 @@ export default function SubjectsPage() {
               onClick={() => openSections(s.id)}
               className="w-full text-left border rounded px-4 py-2 hover:bg-gray-50"
             >
-              <div className="font-medium">{s.name}</div>
+              <div className="font-medium" style={{ color: '#7a797a' }}>{s.name}</div>
               {statsLoading ? (
-                <p className="text-sm text-gray-500 mt-1">読み込み中…</p>
+                <p className="text-sm mt-1" style={{ color: '#7a797a' }}>読み込み中…</p>
               ) : stat.total === 0 ? (
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm mt-1" style={{ color: '#7a797a' }}>
                   この科目にはまだ問題が登録されていません。
                 </p>
               ) : (
                 <>
-                  <p className="text-sm text-gray-700 mt-1">
+                  <p className="text-sm mt-1" style={{ color: '#7a797a' }}>
                     全{stat.total}問中 {stat.answered}問 解答（正解{' '}
                     {stat.correct}問）
                   </p>

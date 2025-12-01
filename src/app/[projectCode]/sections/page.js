@@ -158,7 +158,7 @@ export default function SectionsPage() {
         contentMaxWidth="max-w-2xl"
       />
       <div className="p-6 max-w-2xl mx-auto">
-      {msg && <p className="mt-4 text-sm">{msg}</p>}
+      {msg && <p className="mt-4 text-sm" style={{ color: '#7a797a' }}>{msg}</p>}
 
       <div className="mt-4 space-y-3">
         {sections.map((sec, index) => {
@@ -178,10 +178,10 @@ export default function SectionsPage() {
               {/* 左側：科目名とセクション番号 */}
               <div className="flex-1 pr-2">
                 {/* 1行目：科目名 */}
-                <div className="font-medium text-base mb-1">{subjectName}</div>
+                <div className="font-medium text-base mb-1" style={{ color: '#7a797a' }}>{subjectName}</div>
                 
                 {/* 2行目：セクション番号 */}
-                <div className="text-sm text-gray-700">
+                <div className="text-sm" style={{ color: '#7a797a' }}>
                   セクション{String(index + 1).padStart(3, '0')}
                 </div>
               </div>
@@ -189,16 +189,15 @@ export default function SectionsPage() {
               {/* 右側：桜アイコンと正解数 */}
               <div className="flex items-end gap-2 flex-shrink-0">
                 {prog.total > 0 && (
-                  <span className="text-sm text-gray-600 mb-1">
+                  <span className="text-sm mb-1" style={{ color: '#7a797a' }}>
                     {prog.correct}/{prog.total}正解
                   </span>
                 )}
                 {/* 桜アイコンまたは蕾アイコン（位置を統一） */}
                 {prog.total > 0 && (
                   <div 
-                    className="flex items-center justify-center self-stretch group-hover:bg-white transition-colors" 
+                    className="flex items-center justify-center self-stretch transition-colors bg-[#e7eefb] group-hover:bg-white" 
                     style={{ 
-                      background: '#e7eefb',
                       minHeight: '3.5rem',
                       width: '3rem'
                     }}

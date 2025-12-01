@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useSearchParams, useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import ErrorBox from '@/components/ErrorBox'; // ① 作ったコンポーネント
+import ProgressBar from '@/components/ui/ProgressBar';
 
 function shuffleArray(items = []) {
   const arr = [...items];
@@ -34,6 +35,8 @@ export default function QuestionsOneByOnePage() {
   const [questions, setQuestions] = useState([]);
   const [sectionsInSubject, setSectionsInSubject] = useState([]);
   const [sectionName, setSectionName] = useState('');
+  const [subjectName, setSubjectName] = useState('');
+  const [sectionIndex, setSectionIndex] = useState(0);
 
   // 出題モード用の state
   const [currentIndex, setCurrentIndex] = useState(0);        // 何問目か
@@ -48,6 +51,9 @@ export default function QuestionsOneByOnePage() {
   // {
   //   id: string;
   //   text: string;
+
+  // やめるボタンの確認ポップアップ
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   //   userChoiceLabel: string | null;
   //   correctChoiceLabel: string | null;
   //   isCorrect: boolean;
@@ -119,10 +125,23 @@ export default function QuestionsOneByOnePage() {
   useEffect(() => {
     if (!subjectId) {
       setSectionsInSubject([]);
+      setSubjectName('');
       return;
     }
 
     const fetchSections = async () => {
+      // 科目名を取得
+      const { data: subjectData, error: subjectError } = await supabase
+        .from('subjects')
+        .select('name')
+        .eq('id', subjectId)
+        .maybeSingle();
+
+      if (!subjectError && subjectData) {
+        setSubjectName(subjectData.name);
+      }
+
+      // セクション一覧を取得
       const { data, error } = await supabase
         .from('sections')
         .select('id, name')
@@ -131,11 +150,16 @@ export default function QuestionsOneByOnePage() {
 
       if (!error && data) {
         setSectionsInSubject(data);
+        // 現在のセクションのインデックスを取得
+        const currentIndex = data.findIndex((s) => s.id === sectionId);
+        if (currentIndex !== -1) {
+          setSectionIndex(currentIndex);
+        }
       }
     };
 
     fetchSections();
-  }, [subjectId]);
+  }, [subjectId, sectionId]);
 
   // ② 解答ログを Supabase に保存（1問ごと）
   const logAnswer = async (qId, choiceId, isCorrect) => {
@@ -243,16 +267,22 @@ export default function QuestionsOneByOnePage() {
 
   // ===== ここから通常表示用の処理 =====
 
-  // 「回答を送信」ボタン押下
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!selectedChoiceId) return;
+  // 「回答を送信」ボタン押下（選択肢クリック時にも呼ばれる）
+  const handleSubmit = async (e, choiceId = null) => {
+    if (e) e.preventDefault();
+    const targetChoiceId = choiceId || selectedChoiceId;
+    if (!targetChoiceId) return;
+    
+    // 選択肢IDを設定
+    if (choiceId) {
+      setSelectedChoiceId(choiceId);
+    }
 
     const choice = currentQuestion.choices.find(
-      (c) => c.id === selectedChoiceId
+      (c) => c.id === targetChoiceId
     );
     const userChoiceIndex = currentQuestion.choices.findIndex(
-      (c) => c.id === selectedChoiceId
+      (c) => c.id === targetChoiceId
     );
     const userChoiceLabel =
       userChoiceIndex >= 0
@@ -302,63 +332,98 @@ export default function QuestionsOneByOnePage() {
     setPhase('question');
   };
 
+  // やめるボタンの処理
+  function handleQuit() {
+    setShowQuitConfirm(true);
+  }
+
+  function handleQuitConfirm() {
+    router.push(`/${projectCode}/subjects`);
+  }
+
+  function handleQuitCancel() {
+    setShowQuitConfirm(false);
+  }
+
   // ===== 画面描画 =====
 
   return (
-    <main className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold">
-        {headingTitle} - {currentIndex + 1}問目 / 全{totalQuestions}問
+    <main className="min-h-screen p-6 max-w-3xl mx-auto" style={{ background: '#e7eefb' }}>
+      {/* やめるボタン */}
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={handleQuit}
+          className="rounded-lg bg-white border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 transition-colors"
+        >
+          やめる
+        </button>
+      </div>
+
+      {/* 進捗バー */}
+      <div className="mb-4">
+        <ProgressBar 
+          total={totalQuestions} 
+          answered={currentIndex + 1} 
+          color="#5170ff"
+        />
+      </div>
+
+      <h1 className="text-2xl font-bold" style={{ color: '#5170ff' }}>
+        {subjectName}セクション{String(sectionIndex + 1).padStart(3, '0')} ({currentIndex + 1}問目/全{totalQuestions}問)
       </h1>
 
       {/* 質問表示フェーズ */}
       {phase === 'question' && (
-        <section className="mt-6 border rounded p-4 bg-white">
-          <h2 className="font-semibold">
-            Q{currentIndex + 1}. {currentQuestion.body}
+        <section className="mt-6 rounded-lg p-6 bg-white">
+          <h2 className="font-semibold mb-6 text-lg" style={{ color: '#7a797a' }}>
+            {currentQuestion.body}
           </h2>
-          <form onSubmit={handleSubmit} className="mt-4 space-y-2">
+          <div className="space-y-3">
             {currentQuestion.choices?.map((choice, index) => (
-              <label key={choice.id} className="flex items-center gap-2">
+              <button
+                key={choice.id}
+                onClick={() => {
+                  handleSubmit(null, choice.id);
+                }}
+                className="w-full text-left rounded-lg border-2 p-4 flex items-center gap-4 hover:border-[#5170ff] transition-colors bg-white"
+                style={{ 
+                  borderColor: '#e5e7eb'
+                }}
+              >
                 <input
                   type="radio"
                   name={`q-${currentQuestion.id}`}
                   value={choice.id}
                   checked={selectedChoiceId === choice.id}
-                  onChange={() => setSelectedChoiceId(choice.id)}
+                  onChange={() => {}}
+                  className="w-6 h-6 flex-shrink-0 cursor-pointer"
+                  style={{ accentColor: '#5170ff' }}
                 />
-                <span>
+                <span style={{ color: '#7a797a' }} className="flex-1 text-base">
                   {getChoicePrefix(index)}. {choice.label}
                 </span>
-              </label>
+              </button>
             ))}
-
-            <button
-              type="submit"
-              disabled={!selectedChoiceId}
-              className="mt-4 rounded bg-black text-white px-4 py-2 disabled:opacity-50"
-            >
-              回答を送信
-            </button>
-          </form>
+          </div>
         </section>
       )}
 
       {/* 判定＆解説フェーズ */}
       {phase === 'result' && (
         <section className="mt-6 border rounded p-4 bg-white">
-          <h2 className="font-semibold">
+          <h2 className="font-semibold" style={{ color: '#7a797a' }}>
             Q{currentIndex + 1}. {currentQuestion.body}
           </h2>
 
-          <p className="mt-4 font-bold">
+          <p className="mt-4 font-bold" style={{ color: '#7a797a' }}>
             {isCorrectCurrent ? '⭕ 正解！' : '❌ 不正解…'}
           </p>
 
-          <p className="mt-2 text-sm text-gray-700">
+          <p className="mt-2 text-sm" style={{ color: '#7a797a' }}>
             解説: {currentQuestion.explanation}
           </p>
           {!isCorrectCurrent && correctChoiceLabel && (
-            <p className="mt-2 text-sm text-gray-700">
+            <p className="mt-2 text-sm" style={{ color: '#7a797a' }}>
               正解: {correctChoiceLabel}
             </p>
           )}
@@ -375,8 +440,8 @@ export default function QuestionsOneByOnePage() {
       {/* 全問終了フェーズ */}
       {phase === 'finish' && (
         <section className="mt-6 border rounded p-4 bg-white">
-          <h2 className="font-semibold">結果</h2>
-          <p className="mt-2">
+          <h2 className="font-semibold" style={{ color: '#7a797a' }}>結果</h2>
+          <p className="mt-2" style={{ color: '#7a797a' }}>
             全{totalQuestions}問中 {totalCorrect}問 正解でした。
           </p>
 
@@ -385,23 +450,19 @@ export default function QuestionsOneByOnePage() {
             <ul className="mt-4 space-y-3">
               {answerDetails.map((row, index) => (
                 <li key={row.id} className="border rounded p-3">
-                  <p className="font-semibold">
+                  <p className="font-semibold" style={{ color: '#7a797a' }}>
                     Q{index + 1}. {row.text}
                   </p>
-                  <p className="mt-1">あなたの回答：{row.userChoiceLabel ?? '未回答'}</p>
-                  <p
-                    className={`mt-1 font-semibold ${
-                      row.isCorrect ? 'text-green-700' : 'text-red-700'
-                    }`}
-                  >
+                  <p className="mt-1" style={{ color: '#7a797a' }}>あなたの回答：{row.userChoiceLabel ?? '未回答'}</p>
+                  <p className="mt-1 font-semibold" style={{ color: '#7a797a' }}>
                     {row.isCorrect ? '〇 正解' : '✕ 不正解'}
                   </p>
                   {!row.isCorrect && row.correctChoiceLabel && (
-                    <p className="mt-1 text-sm text-gray-700">
+                    <p className="mt-1 text-sm" style={{ color: '#7a797a' }}>
                       正解: {row.correctChoiceLabel}
                     </p>
                   )}
-                  <p className="mt-1 text-sm text-gray-700">
+                  <p className="mt-1 text-sm" style={{ color: '#7a797a' }}>
                     解説: {row.explanation}
                   </p>
                 </li>
@@ -413,18 +474,52 @@ export default function QuestionsOneByOnePage() {
             <a
               href={`/${projectCode}/sections?subject=${subjectId ?? ''}`}
               className="underline"
+              style={{ color: '#7a797a' }}
             >
               ◀ セクション一覧へ戻る
             </a>
           </p>
           {nextSectionId && (
             <p className="mt-2">
-              <button onClick={handleGoNextSection} className="underline">
+              <button 
+                onClick={handleGoNextSection} 
+                className="underline"
+                style={{ color: '#7a797a' }}
+              >
                 ▶ 次のセクションへ
               </button>
             </p>
           )}
         </section>
+      )}
+
+      {/* やめる確認ポップアップ */}
+      {showQuitConfirm && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center z-50"
+          style={{ background: 'rgba(231, 238, 251, 0.9)' }}
+        >
+          <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-lg border border-gray-200">
+            <p className="text-base mb-6 text-center">
+              科目選択画面に戻りますか？<br />
+              これまで回答したデータは保存されます。
+            </p>
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={handleQuitConfirm}
+                className="rounded-lg bg-[#5170ff] text-white px-6 py-2 font-medium hover:opacity-90 transition-opacity"
+              >
+                はい
+              </button>
+              <button
+                onClick={handleQuitCancel}
+                className="rounded-lg bg-gray-200 text-gray-800 px-6 py-2 font-medium hover:bg-gray-300 transition-colors"
+              >
+                いいえ
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );
