@@ -172,7 +172,7 @@ export default function SectionsPage() {
           <button
             key={sec.id}
             onClick={() => openQuestions(sec.id)}
-            className="w-full text-left border rounded px-4 py-3 hover:bg-gray-50"
+            className="group w-full text-left border rounded px-4 py-3 hover:bg-gray-50"
           >
             <div className="flex justify-between items-start">
               {/* 左側：科目名とセクション番号 */}
@@ -196,7 +196,7 @@ export default function SectionsPage() {
                 {/* 桜アイコンまたは蕾アイコン（位置を統一） */}
                 {prog.total > 0 && (
                   <div 
-                    className="flex items-center justify-center self-stretch" 
+                    className="flex items-center justify-center self-stretch group-hover:bg-white transition-colors" 
                     style={{ 
                       background: '#e7eefb',
                       minHeight: '3.5rem',
