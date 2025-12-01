@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import ErrorBox from '@/components/ErrorBox';
+import SectionBanner from '@/components/ui/SectionBanner';
 
 export default function SectionsPage() {
   const { projectCode } = useParams();
@@ -151,42 +152,90 @@ export default function SectionsPage() {
   }
 
   return (
-    <main className="p-6 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold">
-        Sections ({projectCode}) {subjectName && `- ${subjectName}`}
-      </h1>
-
+    <main className="min-h-screen" style={{ background: '#e7eefb' }}>
+      <SectionBanner
+        subjectName={subjectName || ''}
+        contentMaxWidth="max-w-2xl"
+      />
+      <div className="p-6 max-w-2xl mx-auto">
       {msg && <p className="mt-4 text-sm">{msg}</p>}
 
       <div className="mt-4 space-y-3">
-        {sections.map((sec) => {
+        {sections.map((sec, index) => {
           const prog = progressBySection[sec.id] || {
             total: 0,
             answered: 0,
             correct: 0,
           };
+          const isAllCorrect = prog.total > 0 && prog.correct === prog.total;
           return (
           <button
             key={sec.id}
             onClick={() => openQuestions(sec.id)}
-            className="w-full text-left border rounded px-4 py-2 hover:bg-gray-50"
+            className="w-full text-left border rounded px-4 py-3 hover:bg-gray-50"
           >
-            <div className="flex justify-between items-center">
-              <span>{sec.name}</span>
-              <span className="text-sm text-gray-600">
-                {prog.total}問中 {prog.correct}問 正解済
-              </span>
+            <div className="flex justify-between items-start">
+              {/* 左側：科目名とセクション番号 */}
+              <div className="flex-1 pr-2">
+                {/* 1行目：科目名 */}
+                <div className="font-medium text-base mb-1">{subjectName}</div>
+                
+                {/* 2行目：セクション番号 */}
+                <div className="text-sm text-gray-700">
+                  セクション{String(index + 1).padStart(3, '0')}
+                </div>
+              </div>
+
+              {/* 右側：桜アイコンと正解数 */}
+              <div className="flex items-end gap-2 flex-shrink-0">
+                {prog.total > 0 && (
+                  <span className="text-sm text-gray-600 mb-1">
+                    {prog.correct}/{prog.total}正解
+                  </span>
+                )}
+                {/* 桜アイコンまたは蕾アイコン（位置を統一） */}
+                {prog.total > 0 && (
+                  <div 
+                    className="flex items-center justify-center self-stretch" 
+                    style={{ 
+                      background: '#e7eefb',
+                      minHeight: '3.5rem',
+                      width: '3rem'
+                    }}
+                  >
+                    {isAllCorrect ? (
+                      <img
+                        src="/sakura.png"
+                        alt="全問正解"
+                        className="h-12 w-12 object-contain"
+                      />
+                    ) : (
+                      <img
+                        src="/tsubomi.png"
+                        alt="未完了"
+                        className="h-12 w-12 object-contain"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </button>
         );
         })}
       </div>
 
-      <p className="mt-6 text-sm">
-        <button onClick={goSubjects} className="underline">
-          ◀ 科目一覧へ戻る
+      {/* 科目一覧へ戻るボタン */}
+      <div className="mt-6">
+        <button
+          onClick={goSubjects}
+          className="w-full rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity"
+          style={{ background: '#5170ff' }}
+        >
+          科目一覧へ戻る
         </button>
-      </p>
+      </div>
+      </div>
     </main>
   );
 }
