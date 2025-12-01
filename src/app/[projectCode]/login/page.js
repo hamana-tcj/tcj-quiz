@@ -17,7 +17,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return setMsg(`失敗：${error.message}`);
     setMsg('成功！');
-    router.push(`/${projectCode}`);
+    router.push(`/${projectCode}/subjects`);
   }
 
   return (
