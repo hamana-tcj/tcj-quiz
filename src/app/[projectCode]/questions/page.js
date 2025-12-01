@@ -375,9 +375,15 @@ export default function QuestionsOneByOnePage() {
       {/* 質問表示フェーズ */}
       {phase === 'question' && (
         <section className="mt-6 rounded-lg p-6 bg-white">
-          <h2 className="font-semibold mb-6 text-lg" style={{ color: '#7a797a' }}>
+          <h2 className="font-semibold mb-4 text-lg" style={{ color: '#7a797a' }}>
             {currentQuestion.body}
           </h2>
+          
+          {/* 正解/不正解メッセージと同じ高さのスペーサー（選択肢の位置を揃えるため） */}
+          <div className="mb-12 font-bold text-lg" style={{ height: '1.5rem', visibility: 'hidden' }}>
+            ◎ 正解！
+          </div>
+          
           <div className="space-y-3">
             {currentQuestion.choices?.map((choice, index) => (
               <button
@@ -410,16 +416,77 @@ export default function QuestionsOneByOnePage() {
 
       {/* 判定＆解説フェーズ */}
       {phase === 'result' && (
-        <section className="mt-6 border rounded p-4 bg-white">
-          <h2 className="font-semibold" style={{ color: '#7a797a' }}>
-            Q{currentIndex + 1}. {currentQuestion.body}
+        <section className="mt-6 rounded-lg p-6 bg-white">
+          <h2 className="font-semibold mb-4 text-lg" style={{ color: '#7a797a' }}>
+            {currentQuestion.body}
           </h2>
 
-          <p className="mt-4 font-bold" style={{ color: '#7a797a' }}>
-            {isCorrectCurrent ? '⭕ 正解！' : '❌ 不正解…'}
+          <p className="mb-12 font-bold text-lg" style={{ color: '#7a797a' }}>
+            {isCorrectCurrent ? '◎ 正解！' : '不正解…'}
           </p>
 
-          <p className="mt-2 text-sm" style={{ color: '#7a797a' }}>
+          {/* 選択肢を表示（問題画面と同じ位置に配置） */}
+          <div className="space-y-3">
+            {currentQuestion.choices?.map((choice, index) => {
+              const isSelected = selectedChoiceId === choice.id;
+              const isCorrect = choice.is_correct;
+              let buttonStyle = {
+                borderColor: '#e5e7eb',
+                backgroundColor: '#ffffff'
+              };
+              
+              if (isSelected && isCorrect) {
+                // 選択した選択肢が正解の場合
+                buttonStyle = {
+                  borderColor: '#10b981',
+                  backgroundColor: '#10b981'
+                };
+              } else if (isSelected && !isCorrect) {
+                // 選択した選択肢が不正解の場合
+                buttonStyle = {
+                  borderColor: '#ef4444',
+                  backgroundColor: '#ef4444'
+                };
+              } else if (!isSelected && isCorrect) {
+                // 選択していないが正解の場合
+                buttonStyle = {
+                  borderColor: '#10b981',
+                  backgroundColor: '#ffffff'
+                };
+              }
+
+              return (
+                <div
+                  key={choice.id}
+                  className="w-full text-left rounded-lg border-2 p-4 flex items-center gap-4 bg-white"
+                  style={buttonStyle}
+                >
+                  {isSelected && !isCorrect && (
+                    <span className="text-white text-xl font-bold flex-shrink-0">✕</span>
+                  )}
+                  {!isSelected && isCorrect && (
+                    <span className="text-green-600 text-xl font-bold flex-shrink-0">○</span>
+                  )}
+                  {isSelected && isCorrect && (
+                    <span className="text-white text-xl font-bold flex-shrink-0">○</span>
+                  )}
+                  {!isSelected && !isCorrect && (
+                    <span className="w-6 h-6 flex-shrink-0"></span>
+                  )}
+                  <span 
+                    style={{ 
+                      color: (isSelected || isCorrect) && (isSelected ? '#ffffff' : '#7a797a') || '#7a797a'
+                    }} 
+                    className="flex-1 text-base"
+                  >
+                    {getChoicePrefix(index)}. {choice.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="mt-6 text-sm" style={{ color: '#7a797a' }}>
             解説: {currentQuestion.explanation}
           </p>
           {!isCorrectCurrent && correctChoiceLabel && (
@@ -430,7 +497,8 @@ export default function QuestionsOneByOnePage() {
 
           <button
             onClick={handleNext}
-            className="mt-4 rounded bg-black text-white px-4 py-2"
+            className="mt-6 rounded-lg text-white font-bold px-6 py-3 shadow-lg hover:opacity-90 transition-opacity"
+            style={{ background: '#5170ff' }}
           >
             {currentIndex + 1 === totalQuestions ? '結果を見る' : '次の問題へ'}
           </button>
