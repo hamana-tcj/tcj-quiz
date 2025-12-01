@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import ErrorBox from '@/components/ErrorBox';
 import HeaderImage from '@/components/ui/HeaderImage';
+import ProgressBar from '@/components/ui/ProgressBar';
 
 export default function SubjectsPage() {
   const { projectCode } = useParams();
@@ -153,7 +154,21 @@ export default function SubjectsPage() {
         contentMaxWidth="max-w-2xl"
       />
       <div className="p-6 max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold">Subjects ({projectCode})</h1>
+        {/* 学習スタートボタン */}
+        <div className="mb-6">
+          <button
+            onClick={() => {
+              if (subjects.length > 0) {
+                openSections(subjects[0].id);
+              }
+            }}
+            disabled={subjects.length === 0}
+            className="w-full rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: '#102891' }}
+          >
+            学習スタート！
+          </button>
+        </div>
 
       {msg && <p className="mt-4 text-sm">{msg}</p>}
 
@@ -174,10 +189,13 @@ export default function SubjectsPage() {
                   この科目にはまだ問題が登録されていません。
                 </p>
               ) : (
-                <p className="text-sm text-gray-700 mt-1">
-                  全{stat.total}問中 {stat.answered}問 解答（正解{' '}
-                  {stat.correct}問）
-                </p>
+                <>
+                  <p className="text-sm text-gray-700 mt-1">
+                    全{stat.total}問中 {stat.answered}問 解答（正解{' '}
+                    {stat.correct}問）
+                  </p>
+                  <ProgressBar total={stat.total} answered={stat.answered} />
+                </>
               )}
             </button>
           );

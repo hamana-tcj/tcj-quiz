@@ -34,6 +34,36 @@ import HeaderImage from '@/components/ui/HeaderImage';
 - **スマホ（md未満）**: 画面幅いっぱいに表示
 - **PC（md以上）**: 指定された`contentMaxWidth`に収めて中央揃え
 
+### ProgressBar
+
+学習の進捗を視覚的に表示するバーコンポーネント。回答済みの割合に応じて色が付きます。
+
+#### 使用方法
+
+```jsx
+import ProgressBar from '@/components/ui/ProgressBar';
+
+<ProgressBar
+  total={300}
+  answered={11}
+  color="#5170ff"
+/>
+```
+
+#### Props
+
+- `total` (number, 必須): 全問数
+- `answered` (number, 必須): 回答済み問数
+- `color` (string, オプション): 進捗バーの色
+  - デフォルト: `'#5170ff'`
+- `className` (string, オプション): 追加のCSSクラス
+
+#### 動作
+
+- `total`が0の場合は何も表示しません
+- 回答済みの割合（`answered / total * 100`）に応じてバーの幅が変わります
+- アニメーション効果付きでスムーズに変化します
+
 ## 今後の拡張
 
 新しい共通コンポーネントを追加する際は、このディレクトリに配置し、このREADMEに使用方法を追記してください。
