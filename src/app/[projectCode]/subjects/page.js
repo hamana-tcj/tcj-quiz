@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import ErrorBox from '@/components/ErrorBox';
+import HeaderImage from '@/components/ui/HeaderImage';
 
 export default function SubjectsPage() {
   const { projectCode } = useParams();
@@ -140,17 +141,19 @@ export default function SubjectsPage() {
     })();
   }, [projectCode, router]);
 
-  function goDashboard() {
-    router.push(`/${projectCode}`);
-  }
-
   function openSections(subjectId) {
     router.push(`/${projectCode}/sections?subject=${subjectId}`);
   }
 
   return (
-    <main className="p-6 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold">Subjects ({projectCode})</h1>
+    <main className="min-h-screen" style={{ background: '#e7eefb' }}>
+      <HeaderImage
+        src="/logo.png"
+        alt="TCJ ロゴ"
+        contentMaxWidth="max-w-2xl"
+      />
+      <div className="p-6 max-w-2xl mx-auto">
+        <h1 className="text-2xl font-bold">Subjects ({projectCode})</h1>
 
       {msg && <p className="mt-4 text-sm">{msg}</p>}
 
@@ -180,7 +183,7 @@ export default function SubjectsPage() {
           );
         })}
       </div>
-
+      </div>
     </main>
   );
 }
