@@ -146,6 +146,12 @@ export default function SubjectsPage() {
     router.push(`/${projectCode}/sections?subject=${subjectId}`);
   }
 
+  // ログアウト処理
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.replace(`/${projectCode}/login`);
+  }
+
   return (
     <main className="min-h-screen" style={{ background: '#e7eefb' }}>
       <HeaderImage
@@ -201,6 +207,17 @@ export default function SubjectsPage() {
           );
         })}
       </div>
+
+        {/* ログアウトボタン */}
+        <div className="mt-6">
+          <button
+            onClick={handleSignOut}
+            className="w-full rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity"
+            style={{ background: '#5170ff' }}
+          >
+            ログアウト
+          </button>
+        </div>
       </div>
     </main>
   );
