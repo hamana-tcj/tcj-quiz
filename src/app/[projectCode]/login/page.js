@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import HeaderImage from '@/components/ui/HeaderImage';
 
 export default function LoginPage() {
   const { projectCode } = useParams();
@@ -22,15 +23,11 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen" style={{ background: '#e7eefb' }}>
-      {/* トップ画像（画面幅いっぱい） */}
-      <div className="w-full mb-6">
-        <img
-          src="/logo.png"
-          alt="ログイン"
-          className="w-full h-auto object-contain"
-        />
-      </div>
-
+      <HeaderImage
+        src="/logo.png"
+        alt="ログイン"
+        contentMaxWidth="max-w-md"
+      />
       <div className="p-6 max-w-md mx-auto">
 
         <form onSubmit={onSubmit} className="space-y-4">

@@ -595,9 +595,9 @@ export default function QuestionsOneByOnePage() {
       {phase === 'finish' && (
         <>
           {/* 結果バナー */}
-          <div className="w-full mb-6">
+          <div className="-mx-6 mb-6">
             {/* スマホ：画面幅いっぱい、PC（md以上）：コンテンツ幅に収める */}
-            <div className="w-full md:mx-auto md:max-w-2xl" style={{ 
+            <div className="w-full md:mx-auto md:max-w-3xl" style={{ 
               background: totalCorrect <= 5 
                 ? '#99a1ae' 
                 : totalCorrect >= 10 
