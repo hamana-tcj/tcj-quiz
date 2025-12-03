@@ -165,17 +165,46 @@ export default function QuestionsOneByOnePage() {
   const logAnswer = async (qId, choiceId, isCorrect) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return; // 未ログインなら何もしない
+      if (!session) {
+        console.warn('logAnswer: No session found');
+        return; // 未ログインなら何もしない
+      }
 
-      await supabase.from('answer_logs').insert({
+      // データ型を確認・変換
+      // section_idは数値型の可能性があるため、数値に変換を試みる
+      const sectionIdNum = sectionId ? (isNaN(Number(sectionId)) ? sectionId : Number(sectionId)) : null;
+      
+      const insertData = {
         user_id: session.user.id,
         question_id: qId,
         choice_id: choiceId,
-        is_correct: isCorrect,
-        section_id: sectionId,
-      });
+        is_correct: Boolean(isCorrect),
+        section_id: sectionIdNum || sectionId, // 数値に変換できた場合は数値、できなかった場合は元の値
+      };
+
+      const { data, error } = await supabase.from('answer_logs').insert(insertData);
+
+      if (error) {
+        console.error('logAnswer insert error:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+        });
+        console.error('Insert data:', insertData);
+        console.error('Data types:', {
+          user_id: typeof insertData.user_id,
+          question_id: typeof insertData.question_id,
+          choice_id: typeof insertData.choice_id,
+          is_correct: typeof insertData.is_correct,
+          section_id: typeof insertData.section_id,
+        });
+      } else {
+        console.log('logAnswer: Successfully saved', { qId, choiceId, isCorrect });
+      }
     } catch (e) {
-      console.error('logAnswer error:', e);
+      console.error('logAnswer exception:', e);
     }
   };
 
@@ -308,7 +337,7 @@ export default function QuestionsOneByOnePage() {
     setAnswerDetails((prev) => [...prev, currentDetail]);
 
     // ログ保存
-    await logAnswer(currentQuestion.id, selectedChoiceId, isCorrect);
+    await logAnswer(currentQuestion.id, targetChoiceId || selectedChoiceId, isCorrect);
   };
 
   const handleGoNextSection = () => {
@@ -349,15 +378,17 @@ export default function QuestionsOneByOnePage() {
 
   return (
     <main className="min-h-screen p-6 max-w-3xl mx-auto" style={{ background: '#e7eefb' }}>
-      {/* やめるボタン */}
-      <div className="flex justify-end mb-4">
-        <button
-          onClick={handleQuit}
-          className="rounded-lg bg-white border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 transition-colors"
-        >
-          やめる
-        </button>
-      </div>
+      {/* やめるボタン（結果画面では非表示） */}
+      {phase !== 'finish' && (
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={handleQuit}
+            className="rounded-lg bg-white border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            やめる
+          </button>
+        </div>
+      )}
 
       {/* 進捗バー */}
       <div className="mb-4">
@@ -380,8 +411,10 @@ export default function QuestionsOneByOnePage() {
           </h2>
           
           {/* 正解/不正解メッセージと同じ高さのスペーサー（選択肢の位置を揃えるため） */}
-          <div className="mb-12 font-bold text-lg" style={{ height: '1.5rem', visibility: 'hidden' }}>
-            ◎ 正解！
+          <div className="mb-6" style={{ height: '4.5rem', minHeight: '4.5rem' }}>
+            <div className="font-bold text-4xl text-center" style={{ visibility: 'hidden' }}>
+              ◎ 正解！
+            </div>
           </div>
           
           <div className="space-y-3">
@@ -421,9 +454,15 @@ export default function QuestionsOneByOnePage() {
             {currentQuestion.body}
           </h2>
 
-          <p className="mb-12 font-bold text-lg" style={{ color: '#7a797a' }}>
-            {isCorrectCurrent ? '◎ 正解！' : '不正解…'}
-          </p>
+          {/* 正解/不正解メッセージ（固定高さで選択肢の位置を揃える） */}
+          <div className="mb-6" style={{ height: '4.5rem', minHeight: '4.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <p 
+              className="font-bold text-4xl text-center"
+              style={{ color: isCorrectCurrent ? '#7a797a' : '#ef4444' }}
+            >
+              {isCorrectCurrent ? '◎ 正解！' : '不正解…'}
+            </p>
+          </div>
 
           {/* 選択肢を表示（問題画面と同じ位置に配置） */}
           <div className="space-y-3">
@@ -438,20 +477,20 @@ export default function QuestionsOneByOnePage() {
               if (isSelected && isCorrect) {
                 // 選択した選択肢が正解の場合
                 buttonStyle = {
-                  borderColor: '#10b981',
-                  backgroundColor: '#10b981'
+                  borderColor: '#00bf63',
+                  backgroundColor: '#c6ffd5'
                 };
               } else if (isSelected && !isCorrect) {
                 // 選択した選択肢が不正解の場合
                 buttonStyle = {
-                  borderColor: '#ef4444',
-                  backgroundColor: '#ef4444'
+                  borderColor: '#cf0000',
+                  backgroundColor: '#ffc3b3'
                 };
               } else if (!isSelected && isCorrect) {
                 // 選択していないが正解の場合
                 buttonStyle = {
-                  borderColor: '#10b981',
-                  backgroundColor: '#ffffff'
+                  borderColor: '#00bf63',
+                  backgroundColor: '#c6ffd5'
                 };
               }
 
@@ -462,20 +501,57 @@ export default function QuestionsOneByOnePage() {
                   style={buttonStyle}
                 >
                   {isSelected && !isCorrect && (
-                    <span className="text-white text-xl font-bold flex-shrink-0">✕</span>
+                    <span 
+                      className="font-bold flex-shrink-0 flex items-center justify-center"
+                      style={{ 
+                        color: '#cf0000',
+                        fontSize: '1rem',
+                        lineHeight: '1rem',
+                        width: '1rem',
+                        height: '1rem'
+                      }}
+                    >
+                      ✕
+                    </span>
                   )}
                   {!isSelected && isCorrect && (
-                    <span className="text-green-600 text-xl font-bold flex-shrink-0">○</span>
+                    <span 
+                      className="font-bold flex-shrink-0 flex items-center justify-center"
+                      style={{ 
+                        color: '#00bf63',
+                        fontSize: '1.5rem',
+                        lineHeight: '1.5rem',
+                        width: '1.5rem',
+                        height: '1.5rem'
+                      }}
+                    >
+                      〇
+                    </span>
                   )}
                   {isSelected && isCorrect && (
-                    <span className="text-white text-xl font-bold flex-shrink-0">○</span>
+                    <span 
+                      className="font-bold flex-shrink-0 flex items-center justify-center"
+                      style={{ 
+                        color: '#00bf63',
+                        fontSize: '1.5rem',
+                        lineHeight: '1.5rem',
+                        width: '1.5rem',
+                        height: '1.5rem'
+                      }}
+                    >
+                      〇
+                    </span>
                   )}
                   {!isSelected && !isCorrect && (
                     <span className="w-6 h-6 flex-shrink-0"></span>
                   )}
                   <span 
                     style={{ 
-                      color: (isSelected || isCorrect) && (isSelected ? '#ffffff' : '#7a797a') || '#7a797a'
+                      color: isSelected && !isCorrect 
+                        ? '#7a797a' 
+                        : (isSelected && isCorrect) || (!isSelected && isCorrect)
+                        ? '#7a797a'
+                        : '#7a797a'
                     }} 
                     className="flex-1 text-base"
                   >
@@ -489,11 +565,6 @@ export default function QuestionsOneByOnePage() {
           <p className="mt-6 text-sm" style={{ color: '#7a797a' }}>
             解説: {currentQuestion.explanation}
           </p>
-          {!isCorrectCurrent && correctChoiceLabel && (
-            <p className="mt-2 text-sm" style={{ color: '#7a797a' }}>
-              正解: {correctChoiceLabel}
-            </p>
-          )}
 
           <button
             onClick={handleNext}
@@ -508,10 +579,12 @@ export default function QuestionsOneByOnePage() {
       {/* 全問終了フェーズ */}
       {phase === 'finish' && (
         <section className="mt-6 border rounded p-4 bg-white">
-          <h2 className="font-semibold" style={{ color: '#7a797a' }}>結果</h2>
-          <p className="mt-2" style={{ color: '#7a797a' }}>
-            全{totalQuestions}問中 {totalCorrect}問 正解でした。
-          </p>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-xl" style={{ color: '#7a797a' }}>結果</h2>
+            <span className="text-base" style={{ color: '#7a797a' }}>
+              （全{totalQuestions}問中 {totalCorrect}問正解でした）
+            </span>
+          </div>
 
           {/* 問題ごとの詳細一覧 */}
           {answerDetails.length > 0 && (
@@ -522,7 +595,7 @@ export default function QuestionsOneByOnePage() {
                     Q{index + 1}. {row.text}
                   </p>
                   <p className="mt-1" style={{ color: '#7a797a' }}>あなたの回答：{row.userChoiceLabel ?? '未回答'}</p>
-                  <p className="mt-1 font-semibold" style={{ color: '#7a797a' }}>
+                  <p className="mt-1 font-semibold" style={{ color: row.isCorrect ? '#00bf63' : '#cf0000' }}>
                     {row.isCorrect ? '〇 正解' : '✕ 不正解'}
                   </p>
                   {!row.isCorrect && row.correctChoiceLabel && (
