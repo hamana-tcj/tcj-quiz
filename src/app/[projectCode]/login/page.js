@@ -21,30 +21,72 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="p-6 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold">Login ({projectCode})</h1>
-      <form onSubmit={onSubmit} className="mt-6 space-y-3">
-        <input
-          type="email"
-          placeholder="メールアドレス"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full border rounded p-2"
-          required
+    <main className="min-h-screen" style={{ background: '#e7eefb' }}>
+      {/* トップ画像（画面幅いっぱい） */}
+      <div className="w-full mb-6">
+        <img
+          src="/logo.png"
+          alt="ログイン"
+          className="w-full h-auto object-contain"
         />
-        <input
-          type="password"
-          placeholder="パスワード"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full border rounded p-2"
-          required
-        />
-        <button type="submit" className="w-full rounded bg-black text-white py-2">
-          サインイン
-        </button>
-      </form>
-      {msg && <p className="mt-3 text-sm">{msg}</p>}
+      </div>
+
+      <div className="p-6 max-w-md mx-auto">
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          {/* メールアドレス */}
+          <div>
+            <label className="block text-sm mb-2" style={{ color: '#7a797a' }}>
+              メールアドレス
+            </label>
+            <input
+              type="email"
+              placeholder="メールアドレス"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full border rounded p-2"
+              required
+            />
+          </div>
+
+          {/* パスワード */}
+          <div>
+            <label className="block text-sm mb-2" style={{ color: '#7a797a' }}>
+              パスワード
+            </label>
+            <input
+              type="password"
+              placeholder="パスワード"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full border rounded p-2"
+              required
+            />
+          </div>
+
+          {/* ログインボタン */}
+          <button 
+            type="submit" 
+            className="w-full rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity"
+            style={{ background: '#5170ff' }}
+          >
+            ログイン
+          </button>
+
+          {/* 初回ログイン・パスワードを忘れた方 */}
+          <div className="text-right">
+            <a 
+              href="#" 
+              className="text-sm"
+              style={{ color: '#5170ff' }}
+            >
+              初回ログイン・パスワードを忘れた方はこちら
+            </a>
+          </div>
+        </form>
+
+        {msg && <p className="mt-3 text-sm text-center">{msg}</p>}
+      </div>
     </main>
   );
 }
