@@ -22,15 +22,16 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen" style={{ background: '#e7eefb' }}>
-      <HeaderImage
-        src="/logo.png"
-        alt="ログイン"
-        contentMaxWidth="max-w-md"
-      />
-      <div className="p-6 max-w-md mx-auto">
+    <main className="min-h-screen flex flex-col" style={{ background: '#e7eefb' }}>
+      <div className="flex-1">
+        <HeaderImage
+          src="/logo.png"
+          alt="ログイン"
+          contentMaxWidth="max-w-md"
+        />
+        <div className="p-6 max-w-md mx-auto">
 
-        <form onSubmit={onSubmit} className="space-y-4">
+          <form onSubmit={onSubmit} className="space-y-4">
           {/* メールアドレス */}
           <div>
             <label className="block text-sm mb-2" style={{ color: '#7a797a' }}>
@@ -82,7 +83,15 @@ export default function LoginPage() {
           </div>
         </form>
 
-        {msg && <p className="mt-3 text-sm text-center">{msg}</p>}
+          {msg && <p className="mt-3 text-sm text-center">{msg}</p>}
+        </div>
+      </div>
+
+      {/* コピーライト */}
+      <div className="text-center pb-6">
+        <p className="text-xs text-black">
+          ©TCJ Teacher Training Program All Rights Reserved.
+        </p>
       </div>
     </main>
   );
