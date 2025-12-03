@@ -7,13 +7,13 @@
  * レスポンシブ対応で、スマホでは画面幅いっぱい、PCではコンテンツ幅に収めて表示します。
  * 
  * @param {string} subjectName - 科目名
- * @param {string} imageSrc - 画像のパス（publicフォルダからの相対パス、デフォルト: '/section.png'）
+ * @param {string} imageSrc - 画像のパス（publicフォルダからの相対パス、デフォルト: '/section_kuma.png'）
  * @param {string} contentMaxWidth - PCでのコンテンツ最大幅（Tailwindクラス、デフォルト: 'max-w-2xl'）
  * @param {string} className - 追加のCSSクラス
  */
 export default function SectionBanner({
   subjectName,
-  imageSrc = '/section.png',
+  imageSrc = '/section_kuma.png',
   contentMaxWidth = 'max-w-2xl',
   className = '',
 }) {
@@ -33,7 +33,7 @@ export default function SectionBanner({
   };
 
   return (
-    <div className={`w-full mb-6 ${className}`}>
+    <div className={`w-full mb-3 ${className}`}>
       {/* スマホ：画面幅いっぱい、PC（md以上）：コンテンツ幅に収める */}
       <div className={getContainerClasses()} style={{ background: '#5170ff' }}>
         <div className="flex items-center gap-4 sm:gap-6 px-4 sm:px-6" style={{ paddingTop: '5%', paddingBottom: '5%' }}>
@@ -49,9 +49,14 @@ export default function SectionBanner({
 
           {/* 右側のテキスト */}
           <div className="flex-1 text-white min-w-0">
-            <div className="text-sm sm:text-2xl font-bold leading-tight">
-              <div className="break-words">{subjectName}の</div>
-              <div>セクションに挑戦するよ！</div>
+            <div 
+              className="font-bold leading-tight"
+              style={{ 
+                fontSize: 'clamp(0.875rem, 4vw, 1.5rem)'
+              }}
+            >
+              <div className="whitespace-nowrap">{subjectName}の</div>
+              <div className="whitespace-nowrap">セクションに挑戦するよ！</div>
             </div>
           </div>
         </div>

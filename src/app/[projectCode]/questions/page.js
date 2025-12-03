@@ -399,8 +399,23 @@ export default function QuestionsOneByOnePage() {
         />
       </div>
 
-      <h1 className="text-2xl font-bold" style={{ color: '#5170ff' }}>
-        {subjectName}セクション{String(sectionIndex + 1).padStart(3, '0')} ({currentIndex + 1}問目/全{totalQuestions}問)
+      <h1 className="font-bold" style={{ color: '#5170ff' }}>
+        <div 
+          className="whitespace-nowrap"
+          style={{ 
+            fontSize: 'clamp(1rem, 4vw, 1.5rem)'
+          }}
+        >
+          {subjectName}セクション{String(sectionIndex + 1).padStart(3, '0')}
+        </div>
+        <div 
+          className="whitespace-nowrap"
+          style={{ 
+            fontSize: 'clamp(0.875rem, 3vw, 1.25rem)'
+          }}
+        >
+          ({currentIndex + 1}問目/全{totalQuestions}問)
+        </div>
       </h1>
 
       {/* 質問表示フェーズ */}
@@ -578,13 +593,70 @@ export default function QuestionsOneByOnePage() {
 
       {/* 全問終了フェーズ */}
       {phase === 'finish' && (
-        <section className="mt-6 border rounded p-4 bg-white">
-          <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-xl" style={{ color: '#7a797a' }}>結果</h2>
-            <span className="text-base" style={{ color: '#7a797a' }}>
-              （全{totalQuestions}問中 {totalCorrect}問正解でした）
-            </span>
+        <>
+          {/* 結果バナー */}
+          <div className="w-full mb-6">
+            {/* スマホ：画面幅いっぱい、PC（md以上）：コンテンツ幅に収める */}
+            <div className="w-full md:mx-auto md:max-w-2xl" style={{ 
+              background: totalCorrect <= 5 
+                ? '#99a1ae' 
+                : totalCorrect >= 10 
+                ? '#ffe89a' 
+                : '#00bf63' 
+            }}>
+              <div className="flex items-center gap-4 sm:gap-6 px-4 sm:px-6" style={{ paddingTop: '5%', paddingBottom: '5%' }}>
+                {/* 左側の画像 */}
+                <div className="flex-shrink-0">
+                  <img
+                    src={
+                      totalCorrect <= 5 
+                        ? '/ganbarou_kuma.png' 
+                        : totalCorrect >= 10 
+                        ? '/perfect_kuma.png' 
+                        : '/atosukoshi_kuma.png'
+                    }
+                    alt="結果"
+                    className="h-28 sm:h-36 w-auto object-contain"
+                  />
+                </div>
+
+                {/* 右側のテキスト */}
+                <div className="flex-1 min-w-0">
+                  <div 
+                    className="font-bold leading-tight"
+                    style={{ 
+                      color: totalCorrect >= 10 ? '#ff5907' : '#ffffff',
+                      fontSize: 'clamp(0.875rem, 4vw, 1.5rem)'
+                    }}
+                  >
+                    <div className="whitespace-nowrap">／</div>
+                    <div className="whitespace-nowrap">
+                      {totalCorrect <= 5 
+                        ? `${totalCorrect}問正解！・・・がんばろう`
+                        : totalCorrect >= 10 
+                        ? '10問正解！パーフェクト！'
+                        : `${totalCorrect}問正解！・・・あと少し`
+                      }
+                    </div>
+                    <div className="whitespace-nowrap">＼</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+
+          <section className="mt-6 border rounded p-4 bg-white">
+            <div>
+              <h2 className="font-semibold text-xl" style={{ color: '#7a797a' }}>結果</h2>
+              <div 
+                className="whitespace-nowrap text-base sm:text-lg md:text-xl"
+                style={{ 
+                  color: '#7a797a'
+                }}
+              >
+                （全{totalQuestions}問中 {totalCorrect}問正解でした）
+              </div>
+            </div>
 
           {/* 問題ごとの詳細一覧 */}
           {answerDetails.length > 0 && (
@@ -632,6 +704,7 @@ export default function QuestionsOneByOnePage() {
             </p>
           )}
         </section>
+        </>
       )}
 
       {/* やめる確認ポップアップ */}

@@ -75,7 +75,7 @@ import SectionBanner from '@/components/ui/SectionBanner';
 
 <SectionBanner
   subjectName="社会・文化・地域"
-  imageSrc="/section.png"
+  imageSrc="/section_kuma.png"
   contentMaxWidth="max-w-2xl"
 />
 ```
@@ -84,7 +84,7 @@ import SectionBanner from '@/components/ui/SectionBanner';
 
 - `subjectName` (string, 必須): 科目名
 - `imageSrc` (string, オプション): 画像のパス（`public`フォルダからの相対パス）
-  - デフォルト: `'/section.png'`
+  - デフォルト: `'/section_kuma.png'`
 - `contentMaxWidth` (string, オプション): PCでのコンテンツ最大幅（Tailwindクラス）
   - デフォルト: `'max-w-2xl'`
   - 利用可能な値: `'max-w-md'`, `'max-w-lg'`, `'max-w-xl'`, `'max-w-2xl'`, `'max-w-3xl'`, `'max-w-4xl'`
@@ -93,7 +93,7 @@ import SectionBanner from '@/components/ui/SectionBanner';
 #### 表示内容
 
 - 背景色: `#5170ff`
-- 左側: 画像（`section.png`）
+- 左側: 画像（`section_kuma.png`）
 - 右側: 白抜き文字で2行表示
   - 1行目: `{subjectName}の`
   - 2行目: `セクションに挑戦するよ！`
