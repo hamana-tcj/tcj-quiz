@@ -60,7 +60,18 @@ export default function QuestionsOneByOnePage() {
   //   explanation: string;
   // }
 
-  // ① 問題＋選択肢の取得
+  // ① 認証チェック
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.replace(`/${projectCode}/login`);
+        return;
+      }
+    })();
+  }, [projectCode, router]);
+
+  // ② 問題＋選択肢の取得
   useEffect(() => {
     if (!sectionId) {
       setErrorMsg('セクションIDが指定されていません。');
