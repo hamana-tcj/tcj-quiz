@@ -197,3 +197,103 @@ export async function createUsersBatch(emails) {
   return results;
 }
 
+/**
+ * メールアドレスでユーザーを検索
+ * @param {string} email - メールアドレス
+ * @returns {Promise<Object|null>} ユーザー情報（存在しない場合はnull）
+ */
+export async function getUserByEmail(email) {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase Adminクライアントが初期化されていません');
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers();
+    
+    if (error) {
+      throw error;
+    }
+
+    const user = data.users.find(user => user.email === email);
+    return user || null;
+  } catch (error) {
+    console.error('ユーザー検索エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * ユーザーを削除
+ * @param {string} userId - ユーザーID
+ * @returns {Promise<boolean>} 削除成功時はtrue
+ */
+export async function deleteUser(userId) {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase Adminクライアントが初期化されていません');
+  }
+
+  try {
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    
+    if (error) {
+      throw error;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('ユーザー削除エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * メールアドレスでユーザーを削除
+ * @param {string} email - メールアドレス
+ * @returns {Promise<boolean>} 削除成功時はtrue、ユーザーが存在しない場合はfalse
+ */
+export async function deleteUserByEmail(email) {
+  const user = await getUserByEmail(email);
+  
+  if (!user) {
+    return false; // ユーザーが存在しない
+  }
+
+  return await deleteUser(user.id);
+}
+
+/**
+ * 複数のユーザーを一括削除
+ * @param {Array<string>} emails - メールアドレス配列
+ * @returns {Promise<Object>} 削除結果
+ */
+export async function deleteUsersBatch(emails) {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase Adminクライアントが初期化されていません');
+  }
+
+  const results = {
+    success: [],
+    failed: [],
+    notFound: [],
+  };
+
+  for (const email of emails) {
+    try {
+      const deleted = await deleteUserByEmail(email);
+      
+      if (deleted) {
+        results.success.push({ email });
+      } else {
+        results.notFound.push({ email, reason: 'ユーザーが存在しません' });
+      }
+    } catch (error) {
+      results.failed.push({ 
+        email, 
+        error: error.message || '不明なエラー',
+      });
+    }
+  }
+
+  return results;
+}
+

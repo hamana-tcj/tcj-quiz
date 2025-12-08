@@ -26,7 +26,8 @@ jobs:
               "batchSize": 100,
               "offset": 0,
               "emailFieldCode": "email",
-              "query": ""
+              "query": "",
+              "deleteOrphanedUsers": true
             }')
           
           # レスポンスとHTTPステータスコードを分離

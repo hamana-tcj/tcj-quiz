@@ -26,7 +26,7 @@
  */
 
 import { getKintoneRecords, getAllKintoneRecords, extractEmailFromRecord, isValidEmail } from '@/lib/kintoneClient';
-import { createUserWithTempPassword, createUsersBatch, userExists } from '@/lib/supabaseAdmin';
+import { createUserWithTempPassword, createUsersBatch, userExists, deleteUsersBatch } from '@/lib/supabaseAdmin';
 
 export async function POST(request) {
   try {
@@ -39,6 +39,7 @@ export async function POST(request) {
       singleUser = null, // Webhook用: 単一ユーザーのメールアドレス
       processAll = false, // 全件処理するか（デフォルト: false）
       maxBatches = 10, // 全件処理時の最大バッチ数（タイムアウト防止）
+      deleteOrphanedUsers = false, // kintoneに存在しないユーザーを削除するか（デフォルト: false）
     } = body;
 
     // 単一ユーザー同期（Webhook用）
@@ -47,9 +48,10 @@ export async function POST(request) {
     }
 
     // バッチ処理
+    let result;
     if (processAll) {
       // 全件処理モード: 複数バッチを連続処理
-      return await syncAllBatches({
+      result = await syncAllBatches({
         batchSize,
         offset,
         emailFieldCode,
@@ -58,13 +60,28 @@ export async function POST(request) {
       });
     } else {
       // 通常モード: 1バッチのみ処理
-      return await syncBatch({
+      result = await syncBatch({
         batchSize,
         offset,
         emailFieldCode,
         query,
       });
     }
+
+    // 削除処理（オプション）
+    if (deleteOrphanedUsers) {
+      const deleteResult = await deleteOrphanedUsersFromSupabase(emailFieldCode, query);
+      const resultData = await result.json();
+      
+      return Response.json({
+        ...resultData,
+        deletedUsers: deleteResult.deleted,
+        deletedCount: deleteResult.deleted.length,
+        deleteErrors: deleteResult.errors,
+      });
+    }
+
+    return result;
   } catch (error) {
     console.error('同期処理エラー:', error);
     return Response.json(
@@ -410,6 +427,93 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
     message: `全件処理完了: ${batchCount}バッチ処理, 合計 作成 ${allResults.totalCreated}件, スキップ ${allResults.totalSkipped}件, 失敗 ${allResults.totalFailed}件`,
     stoppedEarly: batchCount >= maxBatches && hasMore,
   });
+}
+
+/**
+ * kintoneに存在しないユーザーをSupabaseから削除
+ */
+async function deleteOrphanedUsersFromSupabase(emailFieldCode, query) {
+  const results = {
+    deleted: [],
+    errors: [],
+  };
+
+  try {
+    // 1. kintoneから全レコードを取得（条件に一致するもののみ）
+    const { getAllKintoneRecords, extractEmailFromRecord, isValidEmail } = await import('@/lib/kintoneClient');
+    
+    const allRecords = await getAllKintoneRecords({ 
+      query: query || '', 
+      batchSize: 500 
+    });
+
+    // 2. kintoneに存在するメールアドレスのリストを作成
+    const kintoneEmails = new Set();
+    
+    for (const record of allRecords) {
+      // 条件フィルタリング（クエリが空の場合はデフォルト条件を適用）
+      if (!query || query.trim() === '') {
+        const permissionGroup = record.permissionGroup;
+        if (permissionGroup && permissionGroup.value && Array.isArray(permissionGroup.value)) {
+          const matchesCondition = permissionGroup.value.some(row => {
+            const groupName = row.value?.groupName?.value;
+            if (!groupName) return false;
+            return groupName === '試験対策集中講座（養成）' || 
+                   groupName === '合格パック単体（養成）';
+          });
+          
+          if (!matchesCondition) {
+            continue; // 条件に一致しない場合はスキップ
+          }
+        } else {
+          continue; // permissionGroupが存在しない場合はスキップ
+        }
+      }
+
+      const email = extractEmailFromRecord(record, emailFieldCode);
+      if (email && isValidEmail(email)) {
+        kintoneEmails.add(email.toLowerCase());
+      }
+    }
+
+    console.log(`kintoneに存在するメールアドレス: ${kintoneEmails.size}件`);
+
+    // 3. Supabaseの全ユーザーを取得
+    const { supabaseAdmin } = await import('@/lib/supabaseAdmin');
+    if (!supabaseAdmin) {
+      throw new Error('Supabase Adminクライアントが初期化されていません');
+    }
+
+    const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
+    
+    if (usersError) {
+      throw usersError;
+    }
+
+    // 4. kintoneに存在しないユーザーを特定
+    const usersToDelete = usersData.users.filter(user => {
+      if (!user.email) return false;
+      return !kintoneEmails.has(user.email.toLowerCase());
+    });
+
+    console.log(`削除対象ユーザー: ${usersToDelete.length}件`);
+
+    // 5. ユーザーを削除
+    const deleteResults = await deleteUsersBatch(usersToDelete.map(u => u.email));
+
+    results.deleted = deleteResults.success.map(r => r.email);
+    results.errors = deleteResults.failed;
+
+    console.log(`削除完了: ${results.deleted.length}件, エラー: ${results.errors.length}件`);
+
+  } catch (error) {
+    console.error('削除処理エラー:', error);
+    results.errors.push({
+      error: error.message || '不明なエラー',
+    });
+  }
+
+  return results;
 }
 
 // GETリクエストでヘルスチェックとkintone接続テスト
