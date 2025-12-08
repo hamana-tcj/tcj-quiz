@@ -186,7 +186,12 @@ export default function SetPasswordPage() {
       });
 
       if (updateError) {
-        setError(`エラー：${updateError.message}`);
+        // エラーメッセージを日本語に変換
+        let errorMessage = updateError.message;
+        if (errorMessage.includes('New password should be different from the old password')) {
+          errorMessage = '新しいパスワードは現在のパスワードと異なる必要があります';
+        }
+        setError(`エラー：${errorMessage}`);
         setMsg('');
         return;
       }
