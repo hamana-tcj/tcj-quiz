@@ -152,13 +152,13 @@ export default function SectionsPage() {
   }
 
   return (
-    <main className="min-h-screen" style={{ background: '#e7eefb' }}>
+    <main className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
       <SectionBanner
         subjectName={subjectName || ''}
         contentMaxWidth="max-w-2xl"
       />
       <div className="p-6 max-w-2xl mx-auto">
-      {msg && <p className="mt-4 text-sm" style={{ color: '#7a797a' }}>{msg}</p>}
+      {msg && <p className="mt-4 text-sm" style={{ color: 'var(--text-primary)' }}>{msg}</p>}
 
       <div className="mt-4 space-y-3">
         {sections.map((sec, index) => {
@@ -178,10 +178,10 @@ export default function SectionsPage() {
               {/* 左側：科目名とセクション番号 */}
               <div className="flex-1 pr-2">
                 {/* 1行目：科目名 */}
-                <div className="font-medium text-base mb-1" style={{ color: '#7a797a' }}>{subjectName}</div>
+                <div className="font-medium text-base mb-1" style={{ color: 'var(--text-primary)' }}>{subjectName}</div>
                 
                 {/* 2行目：セクション番号 */}
-                <div className="text-sm" style={{ color: '#7a797a' }}>
+                <div className="text-sm" style={{ color: 'var(--text-primary)' }}>
                   セクション{String(index + 1).padStart(3, '0')}
                 </div>
               </div>
@@ -189,14 +189,15 @@ export default function SectionsPage() {
               {/* 右側：桜アイコンと正解数 */}
               <div className="flex items-end gap-2 flex-shrink-0">
                 {prog.total > 0 && (
-                  <span className="text-sm mb-1" style={{ color: '#7a797a' }}>
+                  <span className="text-sm mb-1" style={{ color: 'var(--text-primary)' }}>
                     {prog.correct}/{prog.total}正解
                   </span>
                 )}
                 {/* 桜アイコン（正解数に応じて出し分け） */}
                 {prog.total > 0 && (
                   <div 
-                    className="flex items-center justify-center self-stretch transition-colors bg-[#e7eefb] group-hover:bg-white" 
+                    className="flex items-center justify-center self-stretch transition-colors group-hover:bg-white"
+                    style={{ background: 'var(--bg-primary)' }} 
                     style={{ 
                       minHeight: '3.5rem',
                       width: '3rem'
@@ -244,7 +245,7 @@ export default function SectionsPage() {
         <button
           onClick={goSubjects}
           className="rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity"
-          style={{ background: '#5170ff', width: '33.333%' }}
+          style={{ background: 'var(--bg-button)', width: '33.333%' }}
         >
           分野一覧に戻る
         </button>

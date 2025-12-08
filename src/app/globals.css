@@ -3,6 +3,29 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  
+  /* アプリ共通のカラーパレット */
+  --bg-primary: #e7eefb;
+  --bg-primary-transparent: rgba(231, 238, 251, 0.9);
+  --bg-white: #ffffff;
+  --bg-button: #5170ff;
+  --bg-banner: #102891;
+  --bg-correct: #c6ffd5;
+  --bg-incorrect: #ffc3b3;
+  --bg-result-low: #99a1ae;
+  --bg-result-medium: #00bf63;
+  --bg-result-high: #ffe89a;
+  
+  --text-primary: #7a797a;
+  --text-white: #ffffff;
+  --text-correct: #00bf63;
+  --text-incorrect: #cf0000;
+  --text-error: #ef4444;
+  --text-result-high: #ff5907;
+  
+  --border-default: #e5e7eb;
+  --border-correct: #00bf63;
+  --border-incorrect: #cf0000;
 }
 
 @theme inline {
@@ -14,8 +37,31 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #1a1a2e;
+    --foreground: #e0e0e0;
+    
+    /* ダークモード用のカラーパレット */
+    --bg-primary: #1a1a2e;
+    --bg-primary-transparent: rgba(26, 26, 46, 0.95);
+    --bg-white: #2a2a3e;
+    --bg-button: #5170ff;
+    --bg-banner: #102891;
+    --bg-correct: rgba(0, 191, 99, 0.2);
+    --bg-incorrect: rgba(207, 0, 0, 0.2);
+    --bg-result-low: #3a3a4e;
+    --bg-result-medium: rgba(0, 191, 99, 0.3);
+    --bg-result-high: rgba(255, 232, 154, 0.3);
+    
+    --text-primary: #e0e0e0;
+    --text-white: #ffffff;
+    --text-correct: #4ade80;
+    --text-incorrect: #f87171;
+    --text-error: #f87171;
+    --text-result-high: #ff8c42;
+    
+    --border-default: #3a3a4e;
+    --border-correct: #4ade80;
+    --border-incorrect: #f87171;
   }
 }
 

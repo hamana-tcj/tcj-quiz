@@ -153,7 +153,7 @@ export default function SubjectsPage() {
   }
 
   return (
-    <main className="min-h-screen" style={{ background: '#e7eefb' }}>
+    <main className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
       <HeaderImage
         src="/logo.png"
         alt="TCJ ロゴ"
@@ -164,13 +164,13 @@ export default function SubjectsPage() {
         <div className="mb-6">
           <div
             className="w-full rounded-lg text-white font-bold text-lg py-4 shadow-lg flex items-center justify-center"
-            style={{ background: '#102891' }}
+            style={{ background: 'var(--bg-banner)' }}
           >
             分野を選んでください
           </div>
         </div>
 
-      {msg && <p className="mt-4 text-sm" style={{ color: '#7a797a' }}>{msg}</p>}
+      {msg && <p className="mt-4 text-sm" style={{ color: 'var(--text-primary)' }}>{msg}</p>}
 
       <div className="mt-4 space-y-3">
         {subjects.map((s) => {
@@ -181,16 +181,16 @@ export default function SubjectsPage() {
               onClick={() => openSections(s.id)}
               className="w-full text-left border rounded px-4 py-2 hover:bg-gray-50"
             >
-              <div className="font-medium" style={{ color: '#7a797a' }}>{s.name}</div>
+              <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{s.name}</div>
               {statsLoading ? (
-                <p className="text-sm mt-1" style={{ color: '#7a797a' }}>読み込み中…</p>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-primary)' }}>読み込み中…</p>
               ) : stat.total === 0 ? (
-                <p className="text-sm mt-1" style={{ color: '#7a797a' }}>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-primary)' }}>
                   この科目にはまだ問題が登録されていません。
                 </p>
               ) : (
                 <>
-                  <p className="text-sm mt-1" style={{ color: '#7a797a' }}>
+                  <p className="text-sm mt-1" style={{ color: 'var(--text-primary)' }}>
                     全{stat.total}問中 {stat.answered}問 解答（正解{' '}
                     {stat.correct}問）
                   </p>
@@ -207,7 +207,7 @@ export default function SubjectsPage() {
           <button
             onClick={handleSignOut}
             className="font-medium"
-            style={{ color: '#7a797a', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            style={{ color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >
             ログアウト
           </button>

@@ -388,7 +388,7 @@ export default function QuestionsOneByOnePage() {
   // ===== 画面描画 =====
 
   return (
-    <main className="min-h-screen p-6 max-w-3xl mx-auto" style={{ background: '#e7eefb' }}>
+    <main className="min-h-screen p-6 max-w-3xl mx-auto" style={{ background: 'var(--bg-primary)' }}>
       {/* やめるボタン（結果画面では非表示） */}
       {phase !== 'finish' && (
         <div className="flex justify-end mb-4">
@@ -406,11 +406,11 @@ export default function QuestionsOneByOnePage() {
         <ProgressBar 
           total={totalQuestions} 
           answered={currentIndex + 1} 
-          color="#5170ff"
+          color="var(--bg-button)"
         />
       </div>
 
-      <h1 className="font-bold" style={{ color: '#5170ff' }}>
+      <h1 className="font-bold" style={{ color: 'var(--bg-button)' }}>
         <div 
           className="whitespace-nowrap"
           style={{ 
@@ -431,8 +431,8 @@ export default function QuestionsOneByOnePage() {
 
       {/* 質問表示フェーズ */}
       {phase === 'question' && (
-        <section className="mt-6 rounded-lg p-6 bg-white">
-          <h2 className="font-semibold mb-4 text-lg" style={{ color: '#7a797a' }}>
+        <section className="mt-6 rounded-lg p-6" style={{ background: 'var(--bg-white)' }}>
+          <h2 className="font-semibold mb-4 text-lg" style={{ color: 'var(--text-primary)' }}>
             {currentQuestion.body}
           </h2>
           
@@ -450,7 +450,8 @@ export default function QuestionsOneByOnePage() {
                 onClick={() => {
                   handleSubmit(null, choice.id);
                 }}
-                className="w-full text-left rounded-lg border-2 p-4 flex items-center gap-4 hover:border-[#5170ff] transition-colors bg-white"
+                className="w-full text-left rounded-lg border-2 p-4 flex items-center gap-4 transition-colors"
+                style={{ borderColor: 'var(--border-default)', background: 'var(--bg-white)' }}
                 style={{ 
                   borderColor: '#e5e7eb'
                 }}
@@ -462,9 +463,9 @@ export default function QuestionsOneByOnePage() {
                   checked={selectedChoiceId === choice.id}
                   onChange={() => {}}
                   className="w-6 h-6 flex-shrink-0 cursor-pointer"
-                  style={{ accentColor: '#5170ff' }}
+                  style={{ accentColor: 'var(--bg-button)' }}
                 />
-                <span style={{ color: '#7a797a' }} className="flex-1 text-base">
+                <span style={{ color: 'var(--text-primary)' }} className="flex-1 text-base">
                   {getChoicePrefix(index)}. {choice.label}
                 </span>
               </button>
@@ -475,8 +476,8 @@ export default function QuestionsOneByOnePage() {
 
       {/* 判定＆解説フェーズ */}
       {phase === 'result' && (
-        <section className="mt-6 rounded-lg p-6 bg-white">
-          <h2 className="font-semibold mb-4 text-lg" style={{ color: '#7a797a' }}>
+        <section className="mt-6 rounded-lg p-6" style={{ background: 'var(--bg-white)' }}>
+          <h2 className="font-semibold mb-4 text-lg" style={{ color: 'var(--text-primary)' }}>
             {currentQuestion.body}
           </h2>
 
@@ -484,7 +485,7 @@ export default function QuestionsOneByOnePage() {
           <div className="mb-6" style={{ height: '4.5rem', minHeight: '4.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <p 
               className="font-bold text-4xl text-center"
-              style={{ color: isCorrectCurrent ? '#7a797a' : '#ef4444' }}
+              style={{ color: isCorrectCurrent ? 'var(--text-primary)' : 'var(--text-error)' }}
             >
               {isCorrectCurrent ? '◎ 正解！' : '不正解…'}
             </p>
@@ -496,27 +497,27 @@ export default function QuestionsOneByOnePage() {
               const isSelected = selectedChoiceId === choice.id;
               const isCorrect = choice.is_correct;
               let buttonStyle = {
-                borderColor: '#e5e7eb',
-                backgroundColor: '#ffffff'
+                borderColor: 'var(--border-default)',
+                backgroundColor: 'var(--bg-white)'
               };
               
               if (isSelected && isCorrect) {
                 // 選択した選択肢が正解の場合
                 buttonStyle = {
-                  borderColor: '#00bf63',
-                  backgroundColor: '#c6ffd5'
+                  borderColor: 'var(--border-correct)',
+                  backgroundColor: 'var(--bg-correct)'
                 };
               } else if (isSelected && !isCorrect) {
                 // 選択した選択肢が不正解の場合
                 buttonStyle = {
-                  borderColor: '#cf0000',
-                  backgroundColor: '#ffc3b3'
+                  borderColor: 'var(--border-incorrect)',
+                  backgroundColor: 'var(--bg-incorrect)'
                 };
               } else if (!isSelected && isCorrect) {
                 // 選択していないが正解の場合
                 buttonStyle = {
-                  borderColor: '#00bf63',
-                  backgroundColor: '#c6ffd5'
+                  borderColor: 'var(--border-correct)',
+                  backgroundColor: 'var(--bg-correct)'
                 };
               }
 
@@ -530,7 +531,7 @@ export default function QuestionsOneByOnePage() {
                     <span 
                       className="font-bold flex-shrink-0 flex items-center justify-center"
                       style={{ 
-                        color: '#cf0000',
+                        color: 'var(--text-incorrect)',
                         fontSize: '1rem',
                         lineHeight: '1rem',
                         width: '1rem',
@@ -544,7 +545,7 @@ export default function QuestionsOneByOnePage() {
                     <span 
                       className="font-bold flex-shrink-0 flex items-center justify-center"
                       style={{ 
-                        color: '#00bf63',
+                        color: 'var(--text-correct)',
                         fontSize: '1.5rem',
                         lineHeight: '1.5rem',
                         width: '1.5rem',
@@ -558,7 +559,7 @@ export default function QuestionsOneByOnePage() {
                     <span 
                       className="font-bold flex-shrink-0 flex items-center justify-center"
                       style={{ 
-                        color: '#00bf63',
+                        color: 'var(--text-correct)',
                         fontSize: '1.5rem',
                         lineHeight: '1.5rem',
                         width: '1.5rem',
@@ -574,10 +575,10 @@ export default function QuestionsOneByOnePage() {
                   <span 
                     style={{ 
                       color: isSelected && !isCorrect 
-                        ? '#7a797a' 
+                        ? 'var(--text-primary)' 
                         : (isSelected && isCorrect) || (!isSelected && isCorrect)
-                        ? '#7a797a'
-                        : '#7a797a'
+                        ? 'var(--text-primary)'
+                        : 'var(--text-primary)'
                     }} 
                     className="flex-1 text-base"
                   >
@@ -588,7 +589,7 @@ export default function QuestionsOneByOnePage() {
             })}
           </div>
 
-          <p className="mt-6 text-sm" style={{ color: '#7a797a' }}>
+          <p className="mt-6 text-sm" style={{ color: 'var(--text-primary)' }}>
             解説: {currentQuestion.explanation}
           </p>
 
@@ -596,7 +597,7 @@ export default function QuestionsOneByOnePage() {
             <button
               onClick={handleNext}
               className="rounded-lg text-white font-bold px-6 py-3 shadow-lg hover:opacity-90 transition-opacity"
-              style={{ background: '#5170ff' }}
+              style={{ background: 'var(--bg-button)' }}
             >
               {currentIndex + 1 === totalQuestions ? '結果を見る' : '次の問題へ'}
             </button>
@@ -612,10 +613,10 @@ export default function QuestionsOneByOnePage() {
             {/* スマホ：画面幅いっぱい、PC（md以上）：コンテンツ幅に収める */}
             <div className="w-full md:mx-auto md:max-w-3xl" style={{ 
               background: totalCorrect <= 5 
-                ? '#99a1ae' 
+                ? 'var(--bg-result-low)' 
                 : totalCorrect >= 10 
-                ? '#ffe89a' 
-                : '#00bf63' 
+                ? 'var(--bg-result-high)' 
+                : 'var(--bg-result-medium)' 
             }}>
               <div className="flex items-center gap-4 sm:gap-6 px-4 sm:px-6" style={{ paddingTop: '5%', paddingBottom: '5%' }}>
                 {/* 左側の画像 */}
@@ -638,7 +639,7 @@ export default function QuestionsOneByOnePage() {
                   <div 
                     className="font-bold leading-tight"
                     style={{ 
-                      color: totalCorrect >= 10 ? '#ff5907' : '#ffffff',
+                      color: totalCorrect >= 10 ? 'var(--text-result-high)' : 'var(--text-white)',
                       fontSize: 'clamp(0.875rem, 4vw, 1.5rem)'
                     }}
                   >
@@ -658,13 +659,13 @@ export default function QuestionsOneByOnePage() {
             </div>
           </div>
 
-          <section className="mt-6 border rounded p-4 bg-white">
+          <section className="mt-6 border rounded p-4" style={{ background: 'var(--bg-white)' }}>
             <div>
-              <h2 className="font-semibold text-xl" style={{ color: '#7a797a' }}>結果</h2>
+              <h2 className="font-semibold text-xl" style={{ color: 'var(--text-primary)' }}>結果</h2>
               <div 
                 className="whitespace-nowrap text-base sm:text-lg md:text-xl"
                 style={{ 
-                  color: '#7a797a'
+                  color: 'var(--text-primary)'
                 }}
               >
                 （全{totalQuestions}問中 {totalCorrect}問正解でした）
@@ -676,19 +677,19 @@ export default function QuestionsOneByOnePage() {
             <ul className="mt-4 space-y-3">
               {answerDetails.map((row, index) => (
                 <li key={row.id} className="border rounded p-3">
-                  <p className="font-semibold" style={{ color: '#7a797a' }}>
+                  <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>
                     Q{index + 1}. {row.text}
                   </p>
-                  <p className="mt-1" style={{ color: '#7a797a' }}>あなたの回答：{row.userChoiceLabel ?? '未回答'}</p>
-                  <p className="mt-1 font-semibold" style={{ color: row.isCorrect ? '#00bf63' : '#cf0000' }}>
+                  <p className="mt-1" style={{ color: 'var(--text-primary)' }}>あなたの回答：{row.userChoiceLabel ?? '未回答'}</p>
+                  <p className="mt-1 font-semibold" style={{ color: row.isCorrect ? 'var(--text-correct)' : 'var(--text-incorrect)' }}>
                     {row.isCorrect ? '〇 正解' : '✕ 不正解'}
                   </p>
                   {!row.isCorrect && row.correctChoiceLabel && (
-                    <p className="mt-1 text-sm" style={{ color: '#7a797a' }}>
+                    <p className="mt-1 text-sm" style={{ color: 'var(--text-primary)' }}>
                       正解: {row.correctChoiceLabel}
                     </p>
                   )}
-                  <p className="mt-1 text-sm" style={{ color: '#7a797a' }}>
+                  <p className="mt-1 text-sm" style={{ color: 'var(--text-primary)' }}>
                     解説: {row.explanation}
                   </p>
                 </li>
@@ -700,7 +701,7 @@ export default function QuestionsOneByOnePage() {
             <button
               onClick={() => router.push(`/${projectCode}/sections?subject=${subjectId ?? ''}`)}
               className="rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity"
-              style={{ background: '#5170ff', width: '33.333%', fontSize: 'clamp(0.75rem, 2vw, 1.125rem)', whiteSpace: 'normal', wordBreak: 'break-word' }}
+              style={{ background: 'var(--bg-button)', width: '33.333%', fontSize: 'clamp(0.75rem, 2vw, 1.125rem)', whiteSpace: 'normal', wordBreak: 'break-word' }}
             >
               セクション選択へ戻る
             </button>
@@ -708,7 +709,7 @@ export default function QuestionsOneByOnePage() {
               <button 
                 onClick={handleGoNextSection}
                 className="rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity"
-                style={{ background: '#5170ff', width: '33.333%', fontSize: 'clamp(0.75rem, 2vw, 1.125rem)', whiteSpace: 'normal', wordBreak: 'break-word' }}
+                style={{ background: 'var(--bg-button)', width: '33.333%', fontSize: 'clamp(0.75rem, 2vw, 1.125rem)', whiteSpace: 'normal', wordBreak: 'break-word' }}
               >
                 次のセクションへ進む
               </button>
@@ -722,7 +723,7 @@ export default function QuestionsOneByOnePage() {
       {showQuitConfirm && (
         <div 
           className="fixed inset-0 flex items-center justify-center z-50"
-          style={{ background: 'rgba(231, 238, 251, 0.9)' }}
+          style={{ background: 'var(--bg-primary-transparent)' }}
         >
           <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-lg border border-gray-200">
             <p className="text-base mb-6 text-center">
@@ -732,7 +733,8 @@ export default function QuestionsOneByOnePage() {
             <div className="flex gap-4 justify-center">
               <button
                 onClick={handleQuitConfirm}
-                className="rounded-lg bg-[#5170ff] text-white px-6 py-2 font-medium hover:opacity-90 transition-opacity"
+                className="rounded-lg text-white px-6 py-2 font-medium hover:opacity-90 transition-opacity"
+                style={{ background: 'var(--bg-button)' }}
               >
                 はい
               </button>

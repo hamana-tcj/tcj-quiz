@@ -210,14 +210,14 @@ export default function SetPasswordPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center" style={{ background: 'rgba(231, 238, 251, 0.9)' }}>
-        <p>読み込み中...</p>
+      <main className="min-h-screen flex flex-col items-center justify-center" style={{ background: 'var(--bg-primary-transparent)' }}>
+        <p style={{ color: 'var(--text-primary)' }}>読み込み中...</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen flex flex-col" style={{ background: 'rgba(231, 238, 251, 0.9)' }}>
+    <main className="min-h-screen flex flex-col" style={{ background: 'var(--bg-primary-transparent)' }}>
       <div className="flex-1">
         <HeaderImage
           src="/logo.png"
@@ -228,7 +228,7 @@ export default function SetPasswordPage() {
           <form onSubmit={handleSetPassword} className="space-y-4">
             {/* パスワード */}
             <div>
-              <label className="block text-sm mb-2" style={{ color: '#7a797a' }}>
+              <label className="block text-sm mb-2" style={{ color: 'var(--text-primary)' }}>
                 新しいパスワード
               </label>
               <div className="relative">
@@ -263,7 +263,7 @@ export default function SetPasswordPage() {
 
             {/* パスワード確認 */}
             <div>
-              <label className="block text-sm mb-2" style={{ color: '#7a797a' }}>
+              <label className="block text-sm mb-2" style={{ color: 'var(--text-primary)' }}>
                 パスワード（確認）
               </label>
               <div className="relative">
@@ -310,7 +310,7 @@ export default function SetPasswordPage() {
             <button 
               type="submit" 
               className="w-full rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity"
-              style={{ background: '#5170ff' }}
+              style={{ background: 'var(--bg-button)' }}
               disabled={!!msg && msg.includes('ログイン画面に移動')}
             >
               パスワードを設定
@@ -321,7 +321,7 @@ export default function SetPasswordPage() {
 
       {/* コピーライト */}
       <div className="text-center pb-6">
-        <p className="text-xs text-black">
+        <p className="text-xs" style={{ color: 'var(--text-primary)' }}>
           © TCJ Global Inc.
         </p>
       </div>

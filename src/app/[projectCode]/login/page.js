@@ -71,7 +71,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col" style={{ background: '#e7eefb' }}>
+    <main className="min-h-screen flex flex-col" style={{ background: 'var(--bg-primary)' }}>
       <div className="flex-1">
         <HeaderImage
           src="/logo.png"
@@ -83,7 +83,7 @@ export default function LoginPage() {
           <form onSubmit={onSubmit} className="space-y-4">
           {/* メールアドレス */}
           <div>
-            <label className="block text-sm mb-2" style={{ color: '#7a797a' }}>
+            <label className="block text-sm mb-2" style={{ color: 'var(--text-primary)' }}>
               メールアドレス
             </label>
             <input
@@ -98,7 +98,7 @@ export default function LoginPage() {
 
           {/* パスワード */}
           <div>
-            <label className="block text-sm mb-2" style={{ color: '#7a797a' }}>
+            <label className="block text-sm mb-2" style={{ color: 'var(--text-primary)' }}>
               パスワード
             </label>
             <div className="relative">
@@ -134,7 +134,7 @@ export default function LoginPage() {
           <button 
             type="submit" 
             className="w-full rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity"
-            style={{ background: '#5170ff' }}
+            style={{ background: 'var(--bg-button)' }}
           >
             ログイン
           </button>
@@ -150,7 +150,7 @@ export default function LoginPage() {
                 setResetMsg('');
               }}
               className="text-sm"
-              style={{ color: '#5170ff', background: 'none', border: 'none', cursor: 'pointer' }}
+              style={{ color: 'var(--bg-button)', background: 'none', border: 'none', cursor: 'pointer' }}
             >
               新規登録・パスワードを忘れた方はこちら
             </button>
@@ -161,19 +161,19 @@ export default function LoginPage() {
 
       {/* パスワードリセットポップアップ */}
       {showPasswordResetPopup && (
-        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(231, 238, 251, 0.9)' }}>
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" style={{ maxWidth: '400px' }}>
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'var(--bg-primary-transparent)' }}>
+          <div className="rounded-lg p-6 max-w-md w-full mx-4" style={{ maxWidth: '400px', background: 'var(--bg-white)' }}>
             <div className="mb-4">
-              <p className="text-sm mb-2" style={{ color: '#7a797a' }}>
+              <p className="text-sm mb-2" style={{ color: 'var(--text-primary)' }}>
                 パスワード設定用のURLを記載したメールを送ります。
               </p>
-              <p className="text-sm" style={{ color: '#7a797a' }}>
+              <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
                 MYページログイン時のアドレスを入力してください
               </p>
             </div>
             <form onSubmit={handlePasswordReset} className="space-y-4">
               <div>
-                <label className="block text-sm mb-2" style={{ color: '#7a797a' }}>
+                <label className="block text-sm mb-2" style={{ color: 'var(--text-primary)' }}>
                   メールアドレス
                 </label>
                 <input
@@ -210,7 +210,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   className="flex-1 rounded-lg text-white font-bold py-2 shadow-lg hover:opacity-90 transition-opacity"
-                  style={{ background: '#5170ff' }}
+                  style={{ background: 'var(--bg-button)' }}
                 >
                   {resetMsg ? 'OK' : '送信'}
                 </button>
@@ -222,7 +222,7 @@ export default function LoginPage() {
 
       {/* コピーライト */}
       <div className="text-center pb-6">
-        <p className="text-xs text-black">
+        <p className="text-xs" style={{ color: 'var(--text-primary)' }}>
           © TCJ Global Inc.
         </p>
       </div>
