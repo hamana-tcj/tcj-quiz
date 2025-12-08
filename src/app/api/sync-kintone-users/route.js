@@ -29,6 +29,10 @@ import { getKintoneRecords, getAllKintoneRecords, extractEmailFromRecord, isVali
 import { createUserWithTempPassword, createUsersBatch, userExists, deleteUsersBatch } from '@/lib/supabaseAdmin';
 
 export async function POST(request) {
+  const startTime = Date.now();
+  console.log('=== kintone → Supabase ユーザー同期処理開始 ===');
+  console.log('開始時刻:', new Date().toISOString());
+  
   try {
     const body = await request.json().catch(() => ({}));
     const {
@@ -41,6 +45,17 @@ export async function POST(request) {
       maxBatches = 10, // 全件処理時の最大バッチ数（タイムアウト防止）
       deleteOrphanedUsers = false, // kintoneに存在しないユーザーを削除するか（デフォルト: false）
     } = body;
+
+    console.log('リクエストパラメータ:', {
+      batchSize,
+      offset,
+      emailFieldCode,
+      query: query || '(空)',
+      singleUser: singleUser || '(なし)',
+      processAll,
+      maxBatches,
+      deleteOrphanedUsers,
+    });
 
     // 単一ユーザー同期（Webhook用）
     if (singleUser) {
@@ -70,18 +85,32 @@ export async function POST(request) {
 
     // 削除処理（オプション）
     if (deleteOrphanedUsers) {
+      console.log('削除処理を開始します...');
       const deleteResult = await deleteOrphanedUsersFromSupabase(emailFieldCode, query);
       const resultData = await result.json();
+      
+      const endTime = Date.now();
+      const duration = ((endTime - startTime) / 1000).toFixed(2);
+      console.log(`=== 同期処理完了（処理時間: ${duration}秒） ===`);
       
       return Response.json({
         ...resultData,
         deletedUsers: deleteResult.deleted,
         deletedCount: deleteResult.deleted.length,
         deleteErrors: deleteResult.errors,
+        duration: `${duration}秒`,
       });
     }
 
-    return result;
+    const endTime = Date.now();
+    const duration = ((endTime - startTime) / 1000).toFixed(2);
+    console.log(`=== 同期処理完了（処理時間: ${duration}秒） ===`);
+    
+    const resultData = await result.json();
+    return Response.json({
+      ...resultData,
+      duration: `${duration}秒`,
+    });
   } catch (error) {
     console.error('同期処理エラー:', error);
     return Response.json(
@@ -336,6 +365,7 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
     });
   } catch (error) {
     console.error('バッチ処理エラー:', error);
+    console.error('エラースタック:', error.stack);
     return Response.json(
       {
         success: false,
@@ -355,6 +385,9 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
  * 全件処理: 複数バッチを連続処理
  */
 async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBatches }) {
+  const startTime = Date.now();
+  console.log('全件処理モード開始');
+  
   const allResults = {
     success: true,
     totalProcessed: 0,
@@ -422,10 +455,21 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
     }
   }
 
+  const endTime = Date.now();
+  const duration = ((endTime - startTime) / 1000).toFixed(2);
+  
+  console.log(`=== 全件処理完了 ===`);
+  console.log(`処理時間: ${duration}秒`);
+  console.log(`バッチ数: ${batchCount}`);
+  console.log(`作成: ${allResults.totalCreated}件`);
+  console.log(`スキップ: ${allResults.totalSkipped}件`);
+  console.log(`失敗: ${allResults.totalFailed}件`);
+  
   return Response.json({
     ...allResults,
     message: `全件処理完了: ${batchCount}バッチ処理, 合計 作成 ${allResults.totalCreated}件, スキップ ${allResults.totalSkipped}件, 失敗 ${allResults.totalFailed}件`,
     stoppedEarly: batchCount >= maxBatches && hasMore,
+    duration: `${duration}秒`,
   });
 }
 

@@ -17,16 +17,30 @@ jobs:
         env:
           API_URL: ${{ secrets.API_URL || 'https://your-domain.com' }}
         run: |
+          echo "=========================================="
+          echo "kintone → Supabase ユーザー同期処理"
+          echo "=========================================="
           echo "開始時刻: $(date)"
+          echo "API URL: $API_URL"
+          echo ""
+          
+          # API URLがデフォルト値の場合は警告
+          if [ "$API_URL" = "https://your-domain.com" ]; then
+            echo "⚠️  警告: API_URLがデフォルト値です。GitHub SecretsにAPI_URLを設定してください。"
+            echo ""
+          fi
           
           # 同期処理を実行
-          response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL/api/sync-kintone-users" \
+          echo "同期処理を実行中..."
+          response=$(curl -s -L -w "\n%{http_code}" -X POST "$API_URL/api/sync-kintone-users" \
             -H "Content-Type: application/json" \
             -d '{
               "batchSize": 100,
               "offset": 0,
               "emailFieldCode": "email",
               "query": "",
+              "processAll": true,
+              "maxBatches": 50,
               "deleteOrphanedUsers": true
             }')
           
@@ -34,37 +48,52 @@ jobs:
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | sed '$d')
           
+          echo ""
           echo "HTTPステータス: $http_code"
-          echo "レスポンス: $body"
+          echo "レスポンス:"
+          echo "$body" | jq '.' 2>/dev/null || echo "$body"
+          echo ""
           
           # エラーチェック
           if [ "$http_code" -ne 200 ]; then
-            echo "エラー: HTTPステータス $http_code"
-            echo "$body" | jq '.' || echo "$body"
+            echo "❌ エラー: HTTPステータス $http_code"
+            echo "$body" | jq '.' 2>/dev/null || echo "$body"
             exit 1
           fi
           
           # 結果を確認
-          success=$(echo "$body" | jq -r '.success // false')
+          success=$(echo "$body" | jq -r '.success // false' 2>/dev/null)
           if [ "$success" != "true" ]; then
-            echo "警告: 同期処理が失敗しました"
-            echo "$body" | jq '.' || echo "$body"
+            echo "❌ 警告: 同期処理が失敗しました"
+            echo "$body" | jq '.' 2>/dev/null || echo "$body"
+            
+            # エラーメッセージを表示
+            error_msg=$(echo "$body" | jq -r '.error // "不明なエラー"' 2>/dev/null)
+            if [ -n "$error_msg" ] && [ "$error_msg" != "null" ]; then
+              echo ""
+              echo "エラー詳細: $error_msg"
+            fi
             exit 1
           fi
           
           # 結果を表示
-          processed=$(echo "$body" | jq -r '.processed // 0')
-          created=$(echo "$body" | jq -r '.created // 0')
-          skipped=$(echo "$body" | jq -r '.skipped // 0')
-          failed=$(echo "$body" | jq -r '.failed // 0')
+          processed=$(echo "$body" | jq -r '.processed // .totalProcessed // 0' 2>/dev/null)
+          created=$(echo "$body" | jq -r '.created // .totalCreated // 0' 2>/dev/null)
+          skipped=$(echo "$body" | jq -r '.skipped // .totalSkipped // 0' 2>/dev/null)
+          failed=$(echo "$body" | jq -r '.failed // .totalFailed // 0' 2>/dev/null)
+          deleted=$(echo "$body" | jq -r '.deletedCount // 0' 2>/dev/null)
           
-          echo "処理結果:"
+          echo "✅ 処理結果:"
           echo "  処理件数: $processed"
           echo "  作成: $created"
           echo "  スキップ: $skipped"
           echo "  失敗: $failed"
-          
+          if [ "$deleted" != "0" ] && [ -n "$deleted" ]; then
+            echo "  削除: $deleted"
+          fi
+          echo ""
           echo "完了時刻: $(date)"
+          echo "=========================================="
           
       - name: Notify on failure
         if: failure()

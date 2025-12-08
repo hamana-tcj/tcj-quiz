@@ -22,6 +22,8 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## 環境変数の設定
 
+### ローカル開発環境
+
 `.env.local`ファイルを作成し、以下の環境変数を設定してください：
 
 ```env
@@ -37,6 +39,55 @@ KINTONE_SUBDOMAIN=your_kintone_subdomain
 KINTONE_API_TOKEN=your_kintone_api_token
 KINTONE_APP_ID=your_kintone_app_id
 ```
+
+### Vercel（本番環境）での設定方法
+
+1. **Vercelダッシュボードにログイン**
+   - [https://vercel.com](https://vercel.com) にアクセス
+   - プロジェクトを選択
+
+2. **環境変数の設定画面を開く**
+   - プロジェクトの「Settings」タブをクリック
+   - 左側のメニューから「Environment Variables」を選択
+
+3. **環境変数を追加**
+   以下の環境変数を1つずつ追加します：
+
+   | 変数名 | 説明 | 例 |
+   |--------|------|-----|
+   | `KINTONE_SUBDOMAIN` | kintoneのサブドメイン | `your-company` |
+   | `KINTONE_API_TOKEN` | kintoneのAPIトークン | `xxxxxxxxxxxxxxxxxxxx` |
+   | `KINTONE_APP_ID` | kintoneのアプリID | `846` |
+   | `NEXT_PUBLIC_SUPABASE_URL` | SupabaseのURL | `https://xxxxx.supabase.co` |
+   | `SUPABASE_SERVICE_ROLE_KEY` | SupabaseのService Role Key | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` |
+
+   **追加手順**:
+   - 「Add New」ボタンをクリック
+   - 「Name」に変数名を入力（例: `KINTONE_SUBDOMAIN`）
+   - 「Value」に値を入力
+   - 「Environment」で適用環境を選択：
+     - **Production**: 本番環境のみ
+     - **Preview**: プレビュー環境（プルリクエストなど）
+     - **Development**: 開発環境
+     - 通常は**Production**と**Preview**の両方にチェックを入れます
+   - 「Save」をクリック
+
+4. **既存の環境変数を確認**
+   - `NEXT_PUBLIC_SUPABASE_URL` と `NEXT_PUBLIC_SUPABASE_ANON_KEY` が既に設定されているか確認
+   - 設定されていない場合は追加してください
+
+5. **環境変数の反映**
+   - 環境変数を追加・変更した後は、**再デプロイが必要**です
+   - 「Deployments」タブから最新のデプロイを選択
+   - 「Redeploy」ボタンをクリックして再デプロイ
+
+### 環境変数の確認方法
+
+Vercelダッシュボードの「Settings」→「Environment Variables」で、設定した環境変数が表示されます。
+
+**注意**: 
+- 環境変数の値は一度保存すると、セキュリティ上の理由で表示されません（`••••••••`のように表示されます）
+- 変更する場合は、新しい値を入力して「Save」をクリックしてください
 
 ### 環境変数の取得方法
 
