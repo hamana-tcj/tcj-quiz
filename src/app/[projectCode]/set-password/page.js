@@ -210,14 +210,14 @@ export default function SetPasswordPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center" style={{ background: '#e7eefb' }}>
+      <main className="min-h-screen flex flex-col items-center justify-center" style={{ background: 'rgba(231, 238, 251, 0.9)' }}>
         <p>読み込み中...</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen flex flex-col" style={{ background: '#e7eefb' }}>
+    <main className="min-h-screen flex flex-col" style={{ background: 'rgba(231, 238, 251, 0.9)' }}>
       <div className="flex-1">
         <HeaderImage
           src="/logo.png"
@@ -322,7 +322,7 @@ export default function SetPasswordPage() {
       {/* コピーライト */}
       <div className="text-center pb-6">
         <p className="text-xs text-black">
-          ©TCJ Teacher Training Program All Rights Reserved.
+          © TCJ Global Inc.
         </p>
       </div>
     </main>
