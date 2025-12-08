@@ -1,0 +1,73 @@
+name: Sync kintone users to Supabase
+
+on:
+  schedule:
+    # 毎時0分に実行（UTC時間）
+    # 日本時間では毎時9分（UTC+9）
+    - cron: '0 * * * *'
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10 # タイムアウト設定（10分）
+    
+    steps:
+      - name: Sync users from kintone to Supabase
+        env:
+          API_URL: ${{ secrets.API_URL || 'https://your-domain.com' }}
+        run: |
+          echo "開始時刻: $(date)"
+          
+          # 同期処理を実行
+          response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL/api/sync-kintone-users" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "batchSize": 100,
+              "offset": 0,
+              "emailFieldCode": "email",
+              "query": ""
+            }')
+          
+          # レスポンスとHTTPステータスコードを分離
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          
+          echo "HTTPステータス: $http_code"
+          echo "レスポンス: $body"
+          
+          # エラーチェック
+          if [ "$http_code" -ne 200 ]; then
+            echo "エラー: HTTPステータス $http_code"
+            echo "$body" | jq '.' || echo "$body"
+            exit 1
+          fi
+          
+          # 結果を確認
+          success=$(echo "$body" | jq -r '.success // false')
+          if [ "$success" != "true" ]; then
+            echo "警告: 同期処理が失敗しました"
+            echo "$body" | jq '.' || echo "$body"
+            exit 1
+          fi
+          
+          # 結果を表示
+          processed=$(echo "$body" | jq -r '.processed // 0')
+          created=$(echo "$body" | jq -r '.created // 0')
+          skipped=$(echo "$body" | jq -r '.skipped // 0')
+          failed=$(echo "$body" | jq -r '.failed // 0')
+          
+          echo "処理結果:"
+          echo "  処理件数: $processed"
+          echo "  作成: $created"
+          echo "  スキップ: $skipped"
+          echo "  失敗: $failed"
+          
+          echo "完了時刻: $(date)"
+          
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "同期処理が失敗しました。ログを確認してください。"
+          # 必要に応じて、Slackやメール通知を追加できます
+
