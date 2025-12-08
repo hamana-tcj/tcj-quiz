@@ -206,7 +206,7 @@ export default function SubjectsPage() {
         <div className="mt-6 text-left">
           <button
             onClick={handleSignOut}
-            className="text-sm"
+            className="font-medium"
             style={{ color: '#7a797a', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >
             ログアウト

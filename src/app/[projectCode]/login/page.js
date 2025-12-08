@@ -161,7 +161,7 @@ export default function LoginPage() {
 
       {/* パスワードリセットポップアップ */}
       {showPasswordResetPopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(231, 238, 251, 0.9)' }}>
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" style={{ maxWidth: '400px' }}>
             <div className="mb-4">
               <p className="text-sm mb-2" style={{ color: '#7a797a' }}>
