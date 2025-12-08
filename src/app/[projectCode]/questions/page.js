@@ -592,13 +592,15 @@ export default function QuestionsOneByOnePage() {
             解説: {currentQuestion.explanation}
           </p>
 
-          <button
-            onClick={handleNext}
-            className="mt-6 rounded-lg text-white font-bold px-6 py-3 shadow-lg hover:opacity-90 transition-opacity"
-            style={{ background: '#5170ff' }}
-          >
-            {currentIndex + 1 === totalQuestions ? '結果を見る' : '次の問題へ'}
-          </button>
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={handleNext}
+              className="rounded-lg text-white font-bold px-6 py-3 shadow-lg hover:opacity-90 transition-opacity"
+              style={{ background: '#5170ff' }}
+            >
+              {currentIndex + 1 === totalQuestions ? '結果を見る' : '次の問題へ'}
+            </button>
+          </div>
         </section>
       )}
 
@@ -694,26 +696,24 @@ export default function QuestionsOneByOnePage() {
             </ul>
           )}
 
-          <p className="mt-6">
-            <a
-              href={`/${projectCode}/sections?subject=${subjectId ?? ''}`}
-              className="underline"
-              style={{ color: '#7a797a' }}
+          <div className="mt-6 flex justify-between items-center">
+            <button
+              onClick={() => router.push(`/${projectCode}/sections?subject=${subjectId ?? ''}`)}
+              className="rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity"
+              style={{ background: '#5170ff', width: '33.333%', fontSize: 'clamp(0.75rem, 2vw, 1.125rem)', whiteSpace: 'normal', wordBreak: 'break-word' }}
             >
-              ◀ セクション一覧へ戻る
-            </a>
-          </p>
-          {nextSectionId && (
-            <p className="mt-2">
+              セクション選択へ戻る
+            </button>
+            {nextSectionId && (
               <button 
-                onClick={handleGoNextSection} 
-                className="underline"
-                style={{ color: '#7a797a' }}
+                onClick={handleGoNextSection}
+                className="rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity"
+                style={{ background: '#5170ff', width: '33.333%', fontSize: 'clamp(0.75rem, 2vw, 1.125rem)', whiteSpace: 'normal', wordBreak: 'break-word' }}
               >
-                ▶ 次のセクションへ
+                次のセクションへ進む
               </button>
-            </p>
-          )}
+            )}
+          </div>
         </section>
         </>
       )}

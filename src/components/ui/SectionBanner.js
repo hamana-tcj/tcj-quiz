@@ -55,8 +55,7 @@ export default function SectionBanner({
                 fontSize: 'clamp(0.875rem, 4vw, 1.5rem)'
               }}
             >
-              <div className="whitespace-nowrap">{subjectName}の</div>
-              <div className="whitespace-nowrap">セクションに挑戦するよ！</div>
+              <div className="whitespace-nowrap">セクションを選んでください</div>
             </div>
           </div>
         </div>

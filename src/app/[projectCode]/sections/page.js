@@ -193,7 +193,7 @@ export default function SectionsPage() {
                     {prog.correct}/{prog.total}正解
                   </span>
                 )}
-                {/* 桜アイコンまたは蕾アイコン（位置を統一） */}
+                {/* 桜アイコン（正解数に応じて出し分け） */}
                 {prog.total > 0 && (
                   <div 
                     className="flex items-center justify-center self-stretch transition-colors bg-[#e7eefb] group-hover:bg-white" 
@@ -202,19 +202,34 @@ export default function SectionsPage() {
                       width: '3rem'
                     }}
                   >
-                    {isAllCorrect ? (
-                      <img
-                        src="/sakura.png"
-                        alt="全問正解"
-                        className="h-12 w-12 object-contain"
-                      />
-                    ) : (
-                      <img
-                        src="/tsubomi.png"
-                        alt="未完了"
-                        className="h-12 w-12 object-contain"
-                      />
-                    )}
+                    {(() => {
+                      const correct = prog.correct || 0;
+                      if (correct >= 10) {
+                        return (
+                          <img
+                            src="/sakura.png"
+                            alt="10問正解"
+                            className="h-12 w-12 object-contain"
+                          />
+                        );
+                      } else if (correct >= 6) {
+                        return (
+                          <img
+                            src="/gobuzaki.png"
+                            alt="6～9問正解"
+                            className="h-12 w-12 object-contain"
+                          />
+                        );
+                      } else {
+                        return (
+                          <img
+                            src="/tsubomi.png"
+                            alt="0～5問正解"
+                            className="h-12 w-12 object-contain"
+                          />
+                        );
+                      }
+                    })()}
                   </div>
                 )}
               </div>
@@ -224,14 +239,14 @@ export default function SectionsPage() {
         })}
       </div>
 
-      {/* 科目一覧へ戻るボタン */}
-      <div className="mt-6">
+      {/* 分野一覧に戻るボタン */}
+      <div className="mt-6 text-left">
         <button
           onClick={goSubjects}
-          className="w-full rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity"
-          style={{ background: '#5170ff' }}
+          className="rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity"
+          style={{ background: '#5170ff', width: '33.333%' }}
         >
-          科目一覧へ戻る
+          分野一覧に戻る
         </button>
       </div>
       </div>
