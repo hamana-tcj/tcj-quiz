@@ -1,6 +1,73 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient';
 import Image from "next/image";
 
 export default function Home() {
+  const router = useRouter();
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  useEffect(() => {
+    // Supabaseの認証フラグメント（パスワードリセットなど）を処理
+    const handleAuthRedirect = () => {
+      const hash = window.location.hash;
+      
+      if (hash && (hash.includes('access_token') || hash.includes('error'))) {
+        setIsRedirecting(true);
+        
+        // フラグメントからtypeを取得して、パスワードリセットかどうかを判定
+        const hashParams = new URLSearchParams(hash.substring(1));
+        const type = hashParams.get('type');
+        const error = hashParams.get('error');
+        
+        // projectCodeを取得（デフォルトは'tcj'）
+        // 実際のプロジェクトコードは、環境変数や設定から取得するか、
+        // セッション確立後にユーザー情報から取得する必要がある
+        // ここでは、一般的なデフォルト値を使用
+        const projectCode = 'tcj'; // 必要に応じて環境変数から取得
+        
+        // エラーの場合は、適切なページにリダイレクト
+        if (error) {
+          // エラーパラメータを保持してリダイレクト
+          const errorParams = new URLSearchParams();
+          errorParams.set('error', error);
+          if (hashParams.get('error_code')) {
+            errorParams.set('error_code', hashParams.get('error_code'));
+          }
+          if (hashParams.get('error_description')) {
+            errorParams.set('error_description', hashParams.get('error_description'));
+          }
+          
+          // フラグメントをクエリパラメータに変換してリダイレクト
+          window.location.replace(`/${projectCode}/set-password?${errorParams.toString()}#${hash.substring(1)}`);
+          return;
+        }
+        
+        // パスワードリセットの場合
+        if (type === 'recovery' || hash.includes('access_token')) {
+          // パスワード設定ページにリダイレクト（フラグメントを保持）
+          // window.location.replaceを使用して、即座にリダイレクト
+          window.location.replace(`/${projectCode}/set-password${hash}`);
+          return;
+        }
+      }
+    };
+
+    // 即座に実行（マウント時）
+    handleAuthRedirect();
+  }, []);
+
+  // リダイレクト中の場合はローディング表示
+  if (isRedirecting) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
+        <p>リダイレクト中...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">

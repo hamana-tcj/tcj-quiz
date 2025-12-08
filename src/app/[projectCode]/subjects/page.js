@@ -160,20 +160,14 @@ export default function SubjectsPage() {
         contentMaxWidth="max-w-2xl"
       />
       <div className="p-6 max-w-2xl mx-auto">
-        {/* 学習スタートボタン */}
+        {/* 分野選択メッセージ */}
         <div className="mb-6">
-          <button
-            onClick={() => {
-              if (subjects.length > 0) {
-                openSections(subjects[0].id);
-              }
-            }}
-            disabled={subjects.length === 0}
-            className="w-full rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+          <div
+            className="w-full rounded-lg text-white font-bold text-lg py-4 shadow-lg flex items-center justify-center"
             style={{ background: '#102891' }}
           >
-            学習スタート！
-          </button>
+            分野を選んでください
+          </div>
         </div>
 
       {msg && <p className="mt-4 text-sm" style={{ color: '#7a797a' }}>{msg}</p>}
@@ -208,12 +202,12 @@ export default function SubjectsPage() {
         })}
       </div>
 
-        {/* ログアウトボタン */}
-        <div className="mt-6">
+        {/* ログアウト */}
+        <div className="mt-6 text-left">
           <button
             onClick={handleSignOut}
-            className="w-full rounded-lg text-white font-bold text-lg py-4 shadow-lg hover:opacity-90 transition-opacity"
-            style={{ background: '#5170ff' }}
+            className="text-sm"
+            style={{ color: '#7a797a', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >
             ログアウト
           </button>
