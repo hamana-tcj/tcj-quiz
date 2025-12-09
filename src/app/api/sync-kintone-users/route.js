@@ -353,8 +353,12 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
     }
 
     // バッチサイズに合わせて切り詰め
+    // 注意: フィルタリング後の残りレコードは、次のバッチで処理するのではなく、
+    // kintoneから新しいレコードを取得するためにoffsetを進める
     const recordsToProcess = records.slice(0, batchSize);
     const remainingRecords = records.slice(batchSize);
+    
+    console.log(`フィルタリング後のレコード: 処理対象=${recordsToProcess.length}件, 残り=${remainingRecords.length}件`);
 
     if (recordsToProcess.length === 0) {
       // フィルタリング後に0件になった場合、次のバッチがあるかチェック
@@ -490,10 +494,15 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
     
     if (hasMoreFilteredRecords || hasMoreKintoneRecords) {
       results.hasMore = true;
-      // フィルタリング後の残りレコードがある場合は、現在のoffsetを維持
-      // ない場合は、取得したレコード数分オフセットを進める
-      results.nextOffset = hasMoreFilteredRecords ? offset : offset + allRecords.length;
-      console.log(`次のバッチがあります: offset=${results.nextOffset}, 残りフィルタ済み=${remainingRecords.length}件, kintone残り=${hasMoreKintoneRecords ? 'あり' : 'なし'}`);
+      // フィルタリング後の残りレコードがある場合でも、kintoneから取得したレコード数分オフセットを進める
+      // これにより、次回は新しいレコードを取得できる
+      // ただし、残りレコードがある場合は、それらを処理するためにoffsetを維持する必要がある
+      // しかし、全件処理モードでは、次のバッチで新しいレコードを取得する方が効率的
+      // そのため、常に取得したレコード数分オフセットを進める
+      results.nextOffset = offset + allRecords.length;
+      console.log(`次のバッチがあります: offset=${offset} → nextOffset=${results.nextOffset}, 取得レコード数=${allRecords.length}, 残りフィルタ済み=${remainingRecords.length}件, kintone残り=${hasMoreKintoneRecords ? 'あり' : 'なし'}`);
+    } else {
+      console.log(`次のバッチはありません: offset=${offset}, 取得レコード数=${allRecords.length}, フィルタ済み=${records.length}件`);
     }
 
     const messageParts = [];
@@ -593,7 +602,11 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
       // 次のバッチがあるかチェック
       hasMore = result.hasMore === true;
       if (hasMore) {
+        const previousOffset = currentOffset;
         currentOffset = result.nextOffset || (currentOffset + batchSize);
+        console.log(`バッチ ${batchCount} 完了: offset ${previousOffset} → ${currentOffset}, hasMore=${hasMore}`);
+      } else {
+        console.log(`バッチ ${batchCount} 完了: 次のバッチはありません (offset: ${currentOffset})`);
       }
 
       // エラーが発生した場合は中断
