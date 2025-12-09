@@ -377,10 +377,19 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
 
     for (const { email, recordId } of recordData) {
       try {
+        console.log(`処理中: email=${email}, recordId=${recordId}`);
+        
         // まずkintoneレコードIDで既存ユーザーを検索
         let existingUser = null;
         if (recordId) {
           existingUser = await getUserByKintoneRecordId(recordId);
+          if (existingUser) {
+            console.log(`kintoneレコードID ${recordId} で既存ユーザーを発見: ${existingUser.email} (ID: ${existingUser.id})`);
+          } else {
+            console.log(`kintoneレコードID ${recordId} で既存ユーザーが見つかりませんでした`);
+          }
+        } else {
+          console.log(`レコードIDが取得できませんでした: ${JSON.stringify(recordData.find(r => r.email === email)?.record)}`);
         }
 
         if (existingUser) {
@@ -388,11 +397,12 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
           if (existingUser.email !== email) {
             // メールアドレスが変更されている場合は更新
             try {
+              console.log(`メールアドレス更新を実行: ${existingUser.email} → ${email}`);
               await updateUserEmail(existingUser.id, email);
               updatedCount++;
-              console.log(`メールアドレス更新: ${existingUser.email} → ${email} (レコードID: ${recordId})`);
+              console.log(`✅ メールアドレス更新成功: ${existingUser.email} → ${email} (レコードID: ${recordId})`);
             } catch (updateError) {
-              console.error(`メールアドレス更新エラー (${email}):`, updateError);
+              console.error(`❌ メールアドレス更新エラー (${email}):`, updateError);
               results.failed++;
               results.errors.push({
                 email,
@@ -401,15 +411,18 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
             }
           } else {
             // メールアドレスが同じ場合はスキップ
+            console.log(`メールアドレスが同じためスキップ: ${email}`);
             existingEmails.push(email);
           }
         } else {
           // kintoneレコードIDで見つからない場合、メールアドレスで検索
           const exists = await userExists(email);
           if (exists) {
+            console.log(`メールアドレスで既存ユーザーを発見（レコードIDなし）: ${email}`);
             existingEmails.push(email);
           } else {
             // 新規ユーザーとして作成
+            console.log(`新規ユーザーとして作成: ${email} (レコードID: ${recordId || 'なし'})`);
             recordsToCreate.push({ email, kintoneRecordId: recordId });
           }
         }
@@ -585,8 +598,9 @@ async function deleteOrphanedUsersFromSupabase(emailFieldCode, query) {
       batchSize: 500 
     });
 
-    // 2. kintoneに存在するメールアドレスのリストを作成
+    // 2. kintoneに存在するメールアドレスとレコードIDのリストを作成
     const kintoneEmails = new Set();
+    const kintoneRecordIds = new Set();
     
     for (const record of allRecords) {
       // 条件フィルタリング（クエリが空の場合はデフォルト条件を適用）
@@ -612,9 +626,17 @@ async function deleteOrphanedUsersFromSupabase(emailFieldCode, query) {
       if (email && isValidEmail(email)) {
         kintoneEmails.add(email.toLowerCase());
       }
+
+      // レコードIDも取得
+      const { extractRecordIdFromRecord } = await import('@/lib/kintoneClient');
+      const recordId = extractRecordIdFromRecord(record);
+      if (recordId) {
+        kintoneRecordIds.add(String(recordId));
+      }
     }
 
     console.log(`kintoneに存在するメールアドレス: ${kintoneEmails.size}件`);
+    console.log(`kintoneに存在するレコードID: ${kintoneRecordIds.size}件`);
 
     // 3. Supabaseの全ユーザーを取得
     const { supabaseAdmin } = await import('@/lib/supabaseAdmin');
@@ -629,9 +651,23 @@ async function deleteOrphanedUsersFromSupabase(emailFieldCode, query) {
     }
 
     // 4. kintoneに存在しないユーザーを特定
+    // メールアドレスが変更されたケースを考慮するため、kintoneレコードIDも確認
     const usersToDelete = usersData.users.filter(user => {
       if (!user.email) return false;
-      return !kintoneEmails.has(user.email.toLowerCase());
+      
+      // kintoneレコードIDで確認（メールアドレスが変更された場合でも削除しない）
+      const userRecordId = user.user_metadata?.kintone_record_id;
+      if (userRecordId && kintoneRecordIds.has(String(userRecordId))) {
+        console.log(`レコードID ${userRecordId} でkintoneに存在するため削除しない: ${user.email}`);
+        return false; // kintoneに存在する（メールアドレスが変更された可能性がある）
+      }
+      
+      // メールアドレスで確認
+      const emailExists = kintoneEmails.has(user.email.toLowerCase());
+      if (!emailExists) {
+        console.log(`削除対象: ${user.email} (レコードID: ${userRecordId || 'なし'})`);
+      }
+      return !emailExists;
     });
 
     console.log(`削除対象ユーザー: ${usersToDelete.length}件`);

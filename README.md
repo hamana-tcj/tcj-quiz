@@ -336,6 +336,102 @@ GitHub Actionsのログで実行結果を確認できます：
 - **処理時間**: バッチサイズを調整して、10分以内に完了するように設定してください
 - **エラーハンドリング**: エラーが発生した場合は、GitHub Actionsのログで確認できます
 
+## Supabaseメール設定
+
+### パスワード変更メールの差出人名を変更する
+
+Supabase Authから送信されるパスワード変更メールの差出人名（現在は「Supabase Auth」）を変更するには、カスタムSMTPプロバイダーを設定する必要があります。
+
+#### 設定手順
+
+1. **Supabaseダッシュボードにログイン**
+   - [https://supabase.com](https://supabase.com) にアクセス
+   - プロジェクトを選択
+
+2. **Authentication設定を開く**
+   - 左側のメニューから「Authentication」を選択
+   - 「Settings」タブを開く
+
+3. **SMTP Settingsを設定**
+   - 「SMTP Settings」セクションまでスクロール
+   - 以下の情報を入力：
+     - **SMTP Host**: SMTPサーバーのホスト名（例: `smtp.resend.com`, `smtp.sendgrid.net`）
+     - **SMTP Port**: SMTPサーバーのポート番号（通常は`587`または`465`）
+     - **SMTP User**: SMTPサーバーのユーザー名
+     - **SMTP Pass**: SMTPサーバーのパスワード
+     - **Sender Name**: 差出人名（例: `TCJ日本語学校`, `試験対策システム`）
+     - **Sender Email**: 送信元のメールアドレス（例: `noreply@your-domain.com`）
+   - 「Save」をクリック
+
+4. **メールテンプレートのカスタマイズ（オプション）**
+   - 「Templates」タブを開く
+   - 「Reset Password」テンプレートを選択
+   - メールの内容やデザインをカスタマイズ
+   - 「Save」をクリック
+
+#### SMTPプロバイダーの選定
+
+**Google Workspaceを使用している場合（推奨）**:
+- **Gmail SMTP**: 自社ドメインからのメール送信が可能
+- 追加のサービス契約不要
+- 設定が簡単
+- 詳細な設定方法は下記を参照
+
+その他のSMTPサービス：
+- **Resend**: 開発者向け、無料プランあり
+- **SendGrid**: 大手サービス、無料プランあり
+- **Amazon SES**: AWS利用者向け、低コスト
+- **Mailgun**: 開発者向け、無料プランあり
+
+#### Google Workspace（Gmail SMTP）の設定方法
+
+Google Workspaceを使用している場合、自社ドメインからのメール送信が可能です。
+
+**1. アプリパスワードの作成**
+
+Google Workspaceのアカウントでアプリパスワードを作成します：
+
+1. Googleアカウントの設定ページにアクセス
+   - [https://myaccount.google.com/](https://myaccount.google.com/)
+   - または、Google Workspaceの管理コンソールから
+
+2. 「セキュリティ」を選択
+
+3. 「2段階認証プロセス」が有効になっていることを確認
+   - 有効になっていない場合は、先に有効化する必要があります
+
+4. 「アプリパスワード」を選択
+   - 「アプリを選択」で「メール」を選択
+   - 「デバイスを選択」で「その他（カスタム名）」を選択し、名前を入力（例: `Supabase Auth`）
+
+5. 「生成」をクリックして、16文字のアプリパスワードをコピー
+   - このパスワードは後で使用します（一度しか表示されません）
+
+**2. SupabaseでのSMTP設定**
+
+Supabaseダッシュボードで以下の設定を行います：
+
+- **SMTP Host**: `smtp.gmail.com`
+- **SMTP Port**: `587`（TLS）または`465`（SSL）
+- **SMTP User**: Google Workspaceのメールアドレス（例: `noreply@your-domain.com`）
+- **SMTP Pass**: 上記で作成したアプリパスワード（16文字）
+- **Sender Name**: 差出人名（例: `TCJ日本語学校`, `試験対策システム`）
+- **Sender Email**: 送信元のメールアドレス（例: `noreply@your-domain.com`）
+
+**3. 注意事項**
+
+- アプリパスワードは通常のパスワードとは異なります
+- 2段階認証が有効になっている必要があります
+- 送信元メールアドレスは、Google Workspaceで管理されているドメインのアドレスを使用してください
+- 1日あたりの送信制限があります（通常は500-2000通/日、プランによって異なります）
+- 大量送信が必要な場合は、SendGridやAmazon SESなどの専用サービスを検討してください
+
+#### 注意事項
+
+- カスタムSMTPを設定しない場合、デフォルトの「Supabase Auth」が差出人名として使用されます
+- SMTP設定後、メール送信が正常に動作するかテストしてください
+- 送信元メールアドレスは、SMTPプロバイダーで認証済みのアドレスを使用してください
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
