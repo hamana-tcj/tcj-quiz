@@ -46,22 +46,75 @@ jobs:
           
           # curlでリダイレクトを追跡（-Lオプションでリダイレクトに従う）
           # -wオプションで最終的なHTTPステータスコードを取得
-          response=$(curl -s -L -w "\n%{http_code}\n%{url_effective}" -X POST "$API_URL/api/sync-kintone-users" \
+          # タイムアウト対策: maxBatchesを10に減らし、batchSizeを50に減らす
+          # 削除処理は別リクエストで実行（タイムアウト回避）
+          echo "1. ユーザー同期処理を実行..."
+          sync_response=$(curl -s -L -w "\n%{http_code}\n%{url_effective}" -X POST "$API_URL/api/sync-kintone-users" \
             -H "Content-Type: application/json" \
             -d '{
-              "batchSize": 100,
+              "batchSize": 50,
               "offset": 0,
               "emailFieldCode": "email",
               "query": "",
               "processAll": true,
-              "maxBatches": 50,
-              "deleteOrphanedUsers": true
+              "maxBatches": 10,
+              "deleteOrphanedUsers": false
             }')
           
           # レスポンスとHTTPステータスコードを分離
-          http_code=$(echo "$response" | tail -n2 | head -n1)
-          final_url=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | sed '$d' | sed '$d')
+          sync_http_code=$(echo "$sync_response" | tail -n2 | head -n1)
+          sync_final_url=$(echo "$sync_response" | tail -n1)
+          sync_body=$(echo "$sync_response" | sed '$d' | sed '$d')
+          
+          echo ""
+          echo "同期処理のHTTPステータス: $sync_http_code"
+          echo "最終URL: $sync_final_url"
+          echo "同期処理のレスポンス:"
+          if [ -n "$sync_body" ]; then
+            echo "$sync_body" | jq '.' 2>/dev/null || echo "$sync_body"
+          else
+            echo "(レスポンスボディが空です)"
+          fi
+          echo ""
+          
+          # 同期処理が成功した場合のみ、削除処理を実行
+          if [ -n "$sync_http_code" ] && [ "$sync_http_code" -eq 200 ]; then
+            echo "2. 削除処理を実行中..."
+            delete_response=$(curl -s -L -w "\n%{http_code}\n%{url_effective}" -X POST "$API_URL/api/sync-kintone-users" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "batchSize": 50,
+                "offset": 0,
+                "emailFieldCode": "email",
+                "query": "",
+                "processAll": false,
+                "deleteOrphanedUsers": true
+              }')
+            
+            delete_http_code=$(echo "$delete_response" | tail -n2 | head -n1)
+            delete_final_url=$(echo "$delete_response" | tail -n1)
+            delete_body=$(echo "$delete_response" | sed '$d' | sed '$d')
+            
+            echo "削除処理のHTTPステータス: $delete_http_code"
+            echo "最終URL: $delete_final_url"
+            echo "削除処理のレスポンス:"
+            if [ -n "$delete_body" ]; then
+              echo "$delete_body" | jq '.' 2>/dev/null || echo "$delete_body"
+            else
+              echo "(レスポンスボディが空です)"
+            fi
+            echo ""
+            
+            # 削除処理が失敗した場合は警告
+            if [ -z "$delete_http_code" ] || [ "$delete_http_code" -ne 200 ]; then
+              echo "⚠️  警告: 削除処理が失敗しました（HTTPステータス: $delete_http_code）"
+            fi
+          fi
+          
+          # 結果判定には同期処理の結果を使用
+          http_code="$sync_http_code"
+          final_url="$sync_final_url"
+          body="$sync_body"
           
           echo ""
           echo "HTTPステータス: $http_code"

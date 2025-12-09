@@ -524,8 +524,22 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
   let batchCount = 0;
   let hasMore = true;
 
+  // タイムアウト対策: 処理時間を監視（Vercelの制限: 10秒/60秒）
+  const MAX_EXECUTION_TIME = 45000; // 45秒（安全マージン）
+  const startTimeForTimeout = Date.now();
+
   while (hasMore && batchCount < maxBatches) {
+    // タイムアウトチェック
+    const elapsed = Date.now() - startTimeForTimeout;
+    if (elapsed > MAX_EXECUTION_TIME) {
+      console.log(`タイムアウト対策: ${elapsed}ms経過したため処理を中断します`);
+      allResults.stoppedEarly = true;
+      allResults.stoppedReason = 'timeout';
+      break;
+    }
+
     batchCount++;
+    console.log(`バッチ ${batchCount}/${maxBatches} を処理中... (経過時間: ${(elapsed / 1000).toFixed(2)}秒)`);
     
     try {
       const batchResult = await syncBatch({
