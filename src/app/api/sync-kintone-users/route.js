@@ -305,9 +305,11 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
       query: query || '', // カスタムクエリが指定されている場合は使用
     });
 
+    console.log(`[バッチ処理開始] offset=${offset}, batchSize=${batchSize}, fetchLimit=${fetchLimit}`);
     console.log(`kintoneから取得: ${allRecords.length}件 (offset: ${offset}, limit: ${fetchLimit})`);
 
     if (allRecords.length === 0) {
+      console.log(`[バッチ処理終了] レコードがありません`);
       return Response.json({
         ...results,
         message: '処理するレコードがありません',
@@ -336,7 +338,7 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
         });
       });
       
-      console.log(`フィルタリング結果: ${beforeFilterCount}件 → ${records.length}件`);
+      console.log(`[フィルタリング] ${beforeFilterCount}件 → ${records.length}件 (条件に一致したレコード数)`);
       
       // デバッグ: 最初のレコードの構造を確認（条件に一致する場合）
       if (records.length > 0) {
@@ -398,21 +400,21 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
     const existingEmails = [];
     let updatedCount = 0;
 
+    console.log(`[ユーザーチェック開始] ${recordData.length}件のレコードをチェックします`);
+
     for (const { email, recordId } of recordData) {
       try {
-        console.log(`処理中: email=${email}, recordId=${recordId}`);
-        
         // まずkintoneレコードIDで既存ユーザーを検索
         let existingUser = null;
         if (recordId) {
           existingUser = await getUserByKintoneRecordId(recordId);
           if (existingUser) {
-            console.log(`kintoneレコードID ${recordId} で既存ユーザーを発見: ${existingUser.email} (ID: ${existingUser.id})`);
+            console.log(`[既存ユーザー発見] kintoneレコードID=${recordId}, email=${email}, Supabase ID=${existingUser.id}`);
           } else {
-            console.log(`kintoneレコードID ${recordId} で既存ユーザーが見つかりませんでした`);
+            console.log(`[新規ユーザー候補] kintoneレコードID=${recordId}, email=${email} (レコードIDで未発見)`);
           }
         } else {
-          console.log(`レコードIDが取得できませんでした: ${JSON.stringify(recordData.find(r => r.email === email)?.record)}`);
+          console.log(`[警告] レコードIDが取得できませんでした: email=${email}`);
         }
 
         if (existingUser) {
@@ -443,11 +445,11 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
           // kintoneレコードIDで見つからない場合、メールアドレスで検索
           const exists = await userExists(email);
           if (exists) {
-            console.log(`メールアドレスで既存ユーザーを発見（レコードIDなし）: ${email}`);
+            console.log(`[既存ユーザー発見] email=${email} (メールアドレスで検出、レコードIDなし)`);
             existingEmails.push(email);
           } else {
             // 新規ユーザーとして作成
-            console.log(`新規ユーザーとして作成: ${email} (レコードID: ${recordId || 'なし'})`);
+            console.log(`[新規ユーザー作成予定] email=${email}, recordId=${recordId || 'なし'}`);
             recordsToCreate.push({ email, kintoneRecordId: recordId });
           }
         }
@@ -459,7 +461,9 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
     }
 
     // 新規ユーザーを作成
+    console.log(`[ユーザー作成開始] ${recordsToCreate.length}件の新規ユーザーを作成します`);
     const createResults = await createUsersBatch(recordsToCreate);
+    console.log(`[ユーザー作成完了] 成功=${createResults.success.length}件, スキップ=${createResults.skipped.length}件, 失敗=${createResults.failed.length}件`);
 
     // 結果を集計
     // 既存ユーザーエラーをスキップとして扱う（失敗から除外）
