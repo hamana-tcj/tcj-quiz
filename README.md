@@ -439,48 +439,63 @@ Supabase Authから送信されるパスワード変更メールの差出人名�
 - **Amazon SES**: AWS利用者向け、低コスト
 - **Mailgun**: 開発者向け、無料プランあり
 
-#### Google Workspace（Gmail SMTP）の設定方法
+#### ⚠️ Google Workspace（Gmail SMTP）についての重要な注意
 
-Google Workspaceを使用している場合、自社ドメインからのメール送信が可能です。
+**2025年3月14日以降、Gmail/Google Workspaceでは基本認証（ユーザー名とパスワード）によるSMTP接続が無効化されました。**
 
-**1. アプリパスワードの作成**
+以前の方法（アプリパスワードを使用したSMTP設定）は、現在では**動作しない可能性が高い**です。Google WorkspaceではOAuth 2.0認証が必須となりましたが、SupabaseのSMTP設定ではOAuth 2.0を直接使用できません。
 
-Google Workspaceのアカウントでアプリパスワードを作成します：
+**推奨される代替手段:**
 
-1. Googleアカウントの設定ページにアクセス
-   - [https://myaccount.google.com/](https://myaccount.google.com/)
-   - または、Google Workspaceの管理コンソールから
+以下の外部メール送信サービスを使用することをお勧めします：
 
-2. 「セキュリティ」を選択
+1. **Resend**（推奨）
+   - 開発者向け、無料プランあり（月3,000通まで）
+   - Supabaseとの統合が容易
+   - 設定方法は下記参照
 
-3. 「2段階認証プロセス」が有効になっていることを確認
-   - 有効になっていない場合は、先に有効化する必要があります
+2. **SendGrid**
+   - 大手サービス、無料プランあり（月100通まで）
+   - 信頼性が高い
 
-4. 「アプリパスワード」を選択
-   - 「アプリを選択」で「メール」を選択
-   - 「デバイスを選択」で「その他（カスタム名）」を選択し、名前を入力（例: `Supabase Auth`）
+3. **Amazon SES**
+   - AWS利用者向け、低コスト
+   - 大量送信に適している
 
-5. 「生成」をクリックして、16文字のアプリパスワードをコピー
-   - このパスワードは後で使用します（一度しか表示されません）
+#### Resendを使用する場合の設定方法（推奨）
 
-**2. SupabaseでのSMTP設定**
+**1. Resendでの準備**
+
+1. [Resend](https://resend.com)にサインアップ
+2. ダッシュボードで「Domains」を選択
+3. 独自ドメインを追加（例: `your-domain.com`）
+4. DNS設定を完了（Resendが提供するDNSレコードをドメインに追加）
+5. ドメインの検証が完了するまで待機（通常数分〜数時間）
+
+**2. Resend APIキーの取得**
+
+1. Resendダッシュボードで「API Keys」を選択
+2. 「Create API Key」をクリック
+3. 名前を入力（例: `Supabase Auth`）
+4. 権限を選択（「Sending access」を選択）
+5. APIキーをコピー（一度しか表示されません）
+
+**3. SupabaseでのSMTP設定**
 
 Supabaseダッシュボードで以下の設定を行います：
 
-- **SMTP Host**: `smtp.gmail.com`
-- **SMTP Port**: `587`（TLS）または`465`（SSL）
-- **SMTP User**: Google Workspaceのメールアドレス（例: `noreply@your-domain.com`）
-- **SMTP Pass**: 上記で作成したアプリパスワード（16文字）
+- **SMTP Host**: `smtp.resend.com`
+- **SMTP Port**: `465`（SSL）または`587`（TLS）
+- **SMTP User**: `resend`
+- **SMTP Pass**: 上記で作成したResend APIキー
 - **Sender Name**: 差出人名（例: `TCJ日本語学校`, `試験対策システム`）
-- **Sender Email**: 送信元のメールアドレス（例: `noreply@your-domain.com`）
+- **Sender Email**: Resendで検証済みのドメインのメールアドレス（例: `noreply@your-domain.com`）
 
-**3. 注意事項**
+**4. 注意事項**
 
-- アプリパスワードは通常のパスワードとは異なります
-- 2段階認証が有効になっている必要があります
-- 送信元メールアドレスは、Google Workspaceで管理されているドメインのアドレスを使用してください
-- 1日あたりの送信制限があります（通常は500-2000通/日、プランによって異なります）
-- 大量送信が必要な場合は、SendGridやAmazon SESなどの専用サービスを検討してください
+- 送信元メールアドレスは、Resendで検証済みのドメインのアドレスを使用してください
+- 無料プランでは月3,000通まで送信可能
+- 大量送信が必要な場合は、有料プランを検討してください
 
 #### 注意事項
 

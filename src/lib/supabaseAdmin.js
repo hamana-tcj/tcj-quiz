@@ -97,7 +97,9 @@ export async function userExists(email) {
       throw error;
     }
 
-    return data.users.some(user => user.email === email);
+    // メールアドレスを小文字に正規化して比較（大文字小文字を区別しない）
+    const normalizedEmail = email?.toLowerCase().trim();
+    return data.users.some(user => user.email?.toLowerCase().trim() === normalizedEmail);
   } catch (error) {
     console.error('ユーザー存在チェックエラー:', error);
     throw error;
@@ -185,9 +187,12 @@ export async function createUsersBatch(emailsOrRecords) {
     const { email, kintoneRecordId } = record;
     
     try {
-      const exists = await userExists(email);
+      // メールアドレスを正規化
+      const normalizedEmail = email?.toLowerCase().trim();
+      
+      const exists = await userExists(normalizedEmail);
       if (exists) {
-        results.skipped.push({ email, reason: '既に存在します' });
+        results.skipped.push({ email: normalizedEmail, reason: '既に存在します' });
         continue;
       }
 
@@ -202,22 +207,46 @@ export async function createUsersBatch(emailsOrRecords) {
       }
 
       const { data, error } = await supabaseAdmin.auth.admin.createUser({
-        email: email,
+        email: normalizedEmail,
         password: generateTempPassword(),
         email_confirm: true,
         user_metadata: userMetadata,
       });
 
       if (error) {
+        // 既存ユーザーエラーの場合はスキップとして扱う
+        if (error.message && (
+          error.message.includes('already been registered') ||
+          error.message.includes('already exists') ||
+          error.message.includes('User already registered')
+        )) {
+          results.skipped.push({ 
+            email: normalizedEmail, 
+            reason: '既に存在します（作成時に検出）',
+          });
+          continue;
+        }
         throw error;
       }
 
-      results.success.push({ email, userId: data.user.id, kintoneRecordId });
+      results.success.push({ email: normalizedEmail, userId: data.user.id, kintoneRecordId });
     } catch (error) {
-      results.failed.push({ 
-        email, 
-        error: error.message || '不明なエラー',
-      });
+      // 既存ユーザーエラーの場合はスキップとして扱う
+      if (error.message && (
+        error.message.includes('already been registered') ||
+        error.message.includes('already exists') ||
+        error.message.includes('User already registered')
+      )) {
+        results.skipped.push({ 
+          email: email?.toLowerCase().trim() || email, 
+          reason: '既に存在します（エラーから検出）',
+        });
+      } else {
+        results.failed.push({ 
+          email: email?.toLowerCase().trim() || email, 
+          error: error.message || '不明なエラー',
+        });
+      }
     }
   }
 

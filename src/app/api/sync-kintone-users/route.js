@@ -371,12 +371,14 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
       });
     }
 
-    // レコードIDとメールアドレスを抽出
+    // レコードIDとメールアドレスを抽出（メールアドレスを正規化）
     const recordData = recordsToProcess
       .map(record => {
         const email = extractEmailFromRecord(record, emailFieldCode);
         const recordId = extractRecordIdFromRecord(record);
-        return { email, recordId, record };
+        // メールアドレスを小文字に正規化
+        const normalizedEmail = email ? email.toLowerCase().trim() : null;
+        return { email: normalizedEmail, originalEmail: email, recordId, record };
       })
       .filter(item => item.email && isValidEmail(item.email));
 
@@ -411,7 +413,9 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
 
         if (existingUser) {
           // kintoneレコードIDで見つかった場合
-          if (existingUser.email !== email) {
+          // メールアドレスを正規化して比較
+          const existingEmailNormalized = existingUser.email?.toLowerCase().trim();
+          if (existingEmailNormalized !== email) {
             // メールアドレスが変更されている場合は更新
             try {
               console.log(`メールアドレス更新を実行: ${existingUser.email} → ${email}`);
@@ -454,12 +458,30 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
     const createResults = await createUsersBatch(recordsToCreate);
 
     // 結果を集計
+    // 既存ユーザーエラーをスキップとして扱う（失敗から除外）
+    const actualFailed = createResults.failed.filter(f => {
+      // 既存ユーザーエラーは失敗としてカウントしない
+      return !f.error || (
+        !f.error.includes('already been registered') &&
+        !f.error.includes('already exists') &&
+        !f.error.includes('User already registered')
+      );
+    });
+    const skippedFromFailed = createResults.failed.filter(f => {
+      // 既存ユーザーエラーはスキップとして扱う
+      return f.error && (
+        f.error.includes('already been registered') ||
+        f.error.includes('already exists') ||
+        f.error.includes('User already registered')
+      );
+    });
+    
     results.processed = recordData.length;
     results.created = createResults.success.length;
     results.updated = updatedCount;
-    results.skipped = existingEmails.length + createResults.skipped.length;
-    results.failed = createResults.failed.length + (results.errors?.length || 0);
-    results.errors = [...(results.errors || []), ...createResults.failed];
+    results.skipped = existingEmails.length + createResults.skipped.length + skippedFromFailed.length;
+    results.failed = actualFailed.length + (results.errors?.length || 0);
+    results.errors = [...(results.errors || []), ...actualFailed];
 
     // 次のバッチがあるかチェック
     // フィルタリング後の残りレコードがある場合、またはkintoneから取得したレコード数がlimitと同じ場合
