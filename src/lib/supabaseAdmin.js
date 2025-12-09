@@ -108,9 +108,10 @@ export async function userExists(email) {
  * Supabaseにユーザーを作成（仮パスワード設定）
  * @param {string} email - メールアドレス
  * @param {string} tempPassword - 仮パスワード（指定しない場合は自動生成）
+ * @param {string} kintoneRecordId - kintoneレコードID（オプション）
  * @returns {Promise<Object>} 作成されたユーザー情報
  */
-export async function createUserWithTempPassword(email, tempPassword = null) {
+export async function createUserWithTempPassword(email, tempPassword = null, kintoneRecordId = null) {
   if (!supabaseAdmin) {
     throw new Error('Supabase Adminクライアントが初期化されていません');
   }
@@ -124,14 +125,22 @@ export async function createUserWithTempPassword(email, tempPassword = null) {
   // 仮パスワード生成
   const password = tempPassword || generateTempPassword();
 
+  // メタデータを構築
+  const userMetadata = {
+    is_initial_password: true, // 初回ログイン判定用フラグ
+  };
+  
+  // kintoneレコードIDをメタデータに追加
+  if (kintoneRecordId) {
+    userMetadata.kintone_record_id = kintoneRecordId;
+  }
+
   try {
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: password,
       email_confirm: true, // メール確認済みとして設定
-      user_metadata: {
-        is_initial_password: true, // 初回ログイン判定用フラグ
-      },
+      user_metadata: userMetadata,
     });
 
     if (error) {
@@ -150,10 +159,10 @@ export async function createUserWithTempPassword(email, tempPassword = null) {
 
 /**
  * 複数のユーザーを一括作成
- * @param {Array<string>} emails - メールアドレス配列
+ * @param {Array<string>|Array<Object>} emailsOrRecords - メールアドレス配列、または{email, kintoneRecordId}の配列
  * @returns {Promise<Object>} 作成結果
  */
-export async function createUsersBatch(emails) {
+export async function createUsersBatch(emailsOrRecords) {
   if (!supabaseAdmin) {
     throw new Error('Supabase Adminクライアントが初期化されていません');
   }
@@ -164,7 +173,17 @@ export async function createUsersBatch(emails) {
     skipped: [],
   };
 
-  for (const email of emails) {
+  // メールアドレス配列か、レコードオブジェクト配列かを判定
+  const records = emailsOrRecords.map(item => {
+    if (typeof item === 'string') {
+      return { email: item, kintoneRecordId: null };
+    }
+    return item;
+  });
+
+  for (const record of records) {
+    const { email, kintoneRecordId } = record;
+    
     try {
       const exists = await userExists(email);
       if (exists) {
@@ -172,20 +191,28 @@ export async function createUsersBatch(emails) {
         continue;
       }
 
+      // メタデータを構築
+      const userMetadata = {
+        is_initial_password: true,
+      };
+      
+      // kintoneレコードIDをメタデータに追加
+      if (kintoneRecordId) {
+        userMetadata.kintone_record_id = String(kintoneRecordId);
+      }
+
       const { data, error } = await supabaseAdmin.auth.admin.createUser({
         email: email,
         password: generateTempPassword(),
         email_confirm: true,
-        user_metadata: {
-          is_initial_password: true,
-        },
+        user_metadata: userMetadata,
       });
 
       if (error) {
         throw error;
       }
 
-      results.success.push({ email, userId: data.user.id });
+      results.success.push({ email, userId: data.user.id, kintoneRecordId });
     } catch (error) {
       results.failed.push({ 
         email, 
@@ -218,6 +245,66 @@ export async function getUserByEmail(email) {
     return user || null;
   } catch (error) {
     console.error('ユーザー検索エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * kintoneレコードIDでユーザーを検索
+ * @param {string} kintoneRecordId - kintoneレコードID
+ * @returns {Promise<Object|null>} ユーザー情報（存在しない場合はnull）
+ */
+export async function getUserByKintoneRecordId(kintoneRecordId) {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase Adminクライアントが初期化されていません');
+  }
+
+  if (!kintoneRecordId) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers();
+    
+    if (error) {
+      throw error;
+    }
+
+    const user = data.users.find(user => 
+      user.user_metadata?.kintone_record_id === String(kintoneRecordId)
+    );
+    return user || null;
+  } catch (error) {
+    console.error('ユーザー検索エラー（kintoneレコードID）:', error);
+    throw error;
+  }
+}
+
+/**
+ * ユーザーのメールアドレスを更新
+ * @param {string} userId - ユーザーID
+ * @param {string} newEmail - 新しいメールアドレス
+ * @returns {Promise<Object>} 更新されたユーザー情報
+ */
+export async function updateUserEmail(userId, newEmail) {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase Adminクライアントが初期化されていません');
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      email: newEmail,
+      email_confirm: true, // メール確認済みとして設定
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    console.log(`ユーザー ${userId} のメールアドレスを ${newEmail} に更新しました`);
+    return data.user;
+  } catch (error) {
+    console.error('メールアドレス更新エラー:', error);
     throw error;
   }
 }

@@ -167,6 +167,25 @@ export async function getAllKintoneRecords({ query = '', batchSize = 500 } = {})
 }
 
 /**
+ * kintoneレコードからレコードIDを抽出
+ * @param {Object} record - kintoneレコード
+ * @returns {string|null} レコードID（存在しない場合はnull）
+ */
+export function extractRecordIdFromRecord(record) {
+  if (!record || !record.$id) {
+    return null;
+  }
+
+  const recordId = record.$id.value;
+  
+  if (recordId) {
+    return String(recordId);
+  }
+
+  return null;
+}
+
+/**
  * kintoneレコードからメールアドレスを抽出
  * @param {Object} record - kintoneレコード
  * @param {string} emailFieldCode - メールアドレスフィールドのフィールドコード

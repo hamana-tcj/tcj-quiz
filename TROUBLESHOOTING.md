@@ -29,6 +29,18 @@ GitHub Actionsの実行ログで以下を確認：
   3. Name: `API_URL`, Value: アプリのURL（例: `https://your-domain.com`）
   4. 「Add secret」をクリック
 
+**`Supabase Adminクライアントが初期化されていません`**
+- 原因: Vercelの環境変数が設定されていない、または再デプロイされていない
+- 解決方法: 
+  1. Vercelダッシュボードで環境変数を設定
+  2. **重要**: 環境変数を設定した後は、必ず再デプロイが必要です
+  3. 必要な環境変数:
+     - `NEXT_PUBLIC_SUPABASE_URL`
+     - `SUPABASE_SERVICE_ROLE_KEY`
+     - `KINTONE_SUBDOMAIN`
+     - `KINTONE_API_TOKEN`
+     - `KINTONE_APP_ID`
+
 **`kintone環境変数が設定されていません`**
 - 原因: 本番環境の環境変数が設定されていない
 - 解決方法: Vercelやデプロイ先の環境変数を確認

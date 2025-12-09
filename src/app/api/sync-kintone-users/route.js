@@ -25,8 +25,8 @@
  * }
  */
 
-import { getKintoneRecords, getAllKintoneRecords, extractEmailFromRecord, isValidEmail } from '@/lib/kintoneClient';
-import { createUserWithTempPassword, createUsersBatch, userExists, deleteUsersBatch } from '@/lib/supabaseAdmin';
+import { getKintoneRecords, getAllKintoneRecords, extractEmailFromRecord, extractRecordIdFromRecord, isValidEmail } from '@/lib/kintoneClient';
+import { createUserWithTempPassword, createUsersBatch, userExists, deleteUsersBatch, getUserByKintoneRecordId, updateUserEmail } from '@/lib/supabaseAdmin';
 
 export async function POST(request) {
   const startTime = Date.now();
@@ -138,22 +138,8 @@ async function syncSingleUser(email) {
   }
 
   try {
-    // 既存ユーザーチェック
-    const exists = await userExists(email);
-    if (exists) {
-      return Response.json({
-        success: true,
-        processed: 1,
-        created: 0,
-        skipped: 1,
-        failed: 0,
-        message: 'ユーザーは既に存在します',
-      });
-    }
-
     // kintoneからメールアドレスでレコードを検索
-    const { getKintoneRecords } = await import('@/lib/kintoneClient');
-    const { extractEmailFromRecord } = await import('@/lib/kintoneClient');
+    const { getKintoneRecords, extractEmailFromRecord, extractRecordIdFromRecord } = await import('@/lib/kintoneClient');
     
     // メールアドレスでレコードを検索（emailFieldCodeはデフォルトで'email'を使用）
     const emailFieldCode = 'email';
@@ -168,6 +154,7 @@ async function syncSingleUser(email) {
         success: false,
         processed: 1,
         created: 0,
+        updated: 0,
         skipped: 0,
         failed: 1,
         error: 'kintoneに該当するレコードが見つかりませんでした',
@@ -183,6 +170,7 @@ async function syncSingleUser(email) {
         success: true,
         processed: 1,
         created: 0,
+        updated: 0,
         skipped: 1,
         failed: 0,
         message: '条件に一致しません（permissionGroupが存在しません）',
@@ -209,17 +197,70 @@ async function syncSingleUser(email) {
       });
     }
 
-    // 条件に一致した場合、ユーザー作成
-    await createUserWithTempPassword(email);
+    // レコードIDとメールアドレスを取得
+    const recordId = extractRecordIdFromRecord(record);
+    const currentEmail = extractEmailFromRecord(record, emailFieldCode);
 
-    return Response.json({
-      success: true,
-      processed: 1,
-      created: 1,
-      skipped: 0,
-      failed: 0,
-      message: 'ユーザーを作成しました',
-    });
+    // kintoneレコードIDで既存ユーザーを検索
+    let existingUser = null;
+    if (recordId) {
+      existingUser = await getUserByKintoneRecordId(recordId);
+    }
+
+    if (existingUser) {
+      // kintoneレコードIDで見つかった場合
+      if (existingUser.email !== currentEmail) {
+        // メールアドレスが変更されている場合は更新
+        await updateUserEmail(existingUser.id, currentEmail);
+        return Response.json({
+          success: true,
+          processed: 1,
+          created: 0,
+          updated: 1,
+          skipped: 0,
+          failed: 0,
+          message: `メールアドレスを更新しました: ${existingUser.email} → ${currentEmail}`,
+        });
+      } else {
+        // メールアドレスが同じ場合はスキップ
+        return Response.json({
+          success: true,
+          processed: 1,
+          created: 0,
+          updated: 0,
+          skipped: 1,
+          failed: 0,
+          message: 'ユーザーは既に存在します',
+        });
+      }
+    } else {
+      // 既存ユーザーチェック（メールアドレスで）
+      const exists = await userExists(currentEmail);
+      if (exists) {
+        return Response.json({
+          success: true,
+          processed: 1,
+          created: 0,
+          updated: 0,
+          skipped: 1,
+          failed: 0,
+          message: 'ユーザーは既に存在します',
+        });
+      }
+
+      // 条件に一致した場合、ユーザー作成
+      await createUserWithTempPassword(currentEmail, null, recordId);
+
+      return Response.json({
+        success: true,
+        processed: 1,
+        created: 1,
+        updated: 0,
+        skipped: 0,
+        failed: 0,
+        message: 'ユーザーを作成しました',
+      });
+    }
   } catch (error) {
     console.error('単一ユーザー同期エラー:', error);
     return Response.json(
@@ -227,6 +268,7 @@ async function syncSingleUser(email) {
         success: false,
         processed: 1,
         created: 0,
+        updated: 0,
         skipped: 0,
         failed: 1,
         error: error.message || 'ユーザー作成に失敗しました',
@@ -312,29 +354,64 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
       });
     }
 
-    // メールアドレスを抽出
-    const emails = records
-      .map(record => extractEmailFromRecord(record, emailFieldCode))
-      .filter(email => email && isValidEmail(email));
+    // レコードIDとメールアドレスを抽出
+    const recordData = records
+      .map(record => {
+        const email = extractEmailFromRecord(record, emailFieldCode);
+        const recordId = extractRecordIdFromRecord(record);
+        return { email, recordId, record };
+      })
+      .filter(item => item.email && isValidEmail(item.email));
 
-    if (emails.length === 0) {
+    if (recordData.length === 0) {
       return Response.json({
         ...results,
         message: '有効なメールアドレスが見つかりませんでした',
       });
     }
 
-    // 既存ユーザーをチェック
-    const emailsToCreate = [];
+    // 既存ユーザーをチェック・更新
+    const recordsToCreate = [];
     const existingEmails = [];
+    let updatedCount = 0;
 
-    for (const email of emails) {
+    for (const { email, recordId } of recordData) {
       try {
-        const exists = await userExists(email);
-        if (exists) {
-          existingEmails.push(email);
+        // まずkintoneレコードIDで既存ユーザーを検索
+        let existingUser = null;
+        if (recordId) {
+          existingUser = await getUserByKintoneRecordId(recordId);
+        }
+
+        if (existingUser) {
+          // kintoneレコードIDで見つかった場合
+          if (existingUser.email !== email) {
+            // メールアドレスが変更されている場合は更新
+            try {
+              await updateUserEmail(existingUser.id, email);
+              updatedCount++;
+              console.log(`メールアドレス更新: ${existingUser.email} → ${email} (レコードID: ${recordId})`);
+            } catch (updateError) {
+              console.error(`メールアドレス更新エラー (${email}):`, updateError);
+              results.failed++;
+              results.errors.push({
+                email,
+                error: `メールアドレス更新失敗: ${updateError.message}`,
+              });
+            }
+          } else {
+            // メールアドレスが同じ場合はスキップ
+            existingEmails.push(email);
+          }
         } else {
-          emailsToCreate.push(email);
+          // kintoneレコードIDで見つからない場合、メールアドレスで検索
+          const exists = await userExists(email);
+          if (exists) {
+            existingEmails.push(email);
+          } else {
+            // 新規ユーザーとして作成
+            recordsToCreate.push({ email, kintoneRecordId: recordId });
+          }
         }
       } catch (error) {
         console.error(`ユーザー存在チェックエラー (${email}):`, error);
@@ -344,14 +421,15 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
     }
 
     // 新規ユーザーを作成
-    const createResults = await createUsersBatch(emailsToCreate);
+    const createResults = await createUsersBatch(recordsToCreate);
 
     // 結果を集計
-    results.processed = emails.length;
+    results.processed = recordData.length;
     results.created = createResults.success.length;
+    results.updated = updatedCount;
     results.skipped = existingEmails.length + createResults.skipped.length;
-    results.failed = createResults.failed.length;
-    results.errors = createResults.failed;
+    results.failed = createResults.failed.length + (results.errors?.length || 0);
+    results.errors = [...(results.errors || []), ...createResults.failed];
 
     // 次のバッチがあるかチェック
     if (records.length === batchSize) {
@@ -359,9 +437,15 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
       results.nextOffset = offset + batchSize;
     }
 
+    const messageParts = [];
+    if (results.created > 0) messageParts.push(`作成 ${results.created}件`);
+    if (results.updated > 0) messageParts.push(`更新 ${results.updated}件`);
+    if (results.skipped > 0) messageParts.push(`スキップ ${results.skipped}件`);
+    if (results.failed > 0) messageParts.push(`失敗 ${results.failed}件`);
+    
     return Response.json({
       ...results,
-      message: `処理完了: 作成 ${results.created}件, スキップ ${results.skipped}件, 失敗 ${results.failed}件`,
+      message: `処理完了: ${messageParts.join(', ')}`,
     });
   } catch (error) {
     console.error('バッチ処理エラー:', error);
@@ -418,6 +502,7 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
       // 結果を集計
       allResults.totalProcessed += result.processed || 0;
       allResults.totalCreated += result.created || 0;
+      allResults.totalUpdated += result.updated || 0;
       allResults.totalSkipped += result.skipped || 0;
       allResults.totalFailed += result.failed || 0;
       
@@ -462,12 +547,21 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
   console.log(`処理時間: ${duration}秒`);
   console.log(`バッチ数: ${batchCount}`);
   console.log(`作成: ${allResults.totalCreated}件`);
+  if (allResults.totalUpdated > 0) {
+    console.log(`更新: ${allResults.totalUpdated}件`);
+  }
   console.log(`スキップ: ${allResults.totalSkipped}件`);
   console.log(`失敗: ${allResults.totalFailed}件`);
   
-  return Response.json({
+    const messageParts = [];
+    if (allResults.totalCreated > 0) messageParts.push(`作成 ${allResults.totalCreated}件`);
+    if (allResults.totalUpdated > 0) messageParts.push(`更新 ${allResults.totalUpdated}件`);
+    if (allResults.totalSkipped > 0) messageParts.push(`スキップ ${allResults.totalSkipped}件`);
+    if (allResults.totalFailed > 0) messageParts.push(`失敗 ${allResults.totalFailed}件`);
+    
+    return Response.json({
     ...allResults,
-    message: `全件処理完了: ${batchCount}バッチ処理, 合計 作成 ${allResults.totalCreated}件, スキップ ${allResults.totalSkipped}件, 失敗 ${allResults.totalFailed}件`,
+    message: `全件処理完了: ${batchCount}バッチ処理, 合計 ${messageParts.join(', ')}`,
     stoppedEarly: batchCount >= maxBatches && hasMore,
     duration: `${duration}秒`,
   });

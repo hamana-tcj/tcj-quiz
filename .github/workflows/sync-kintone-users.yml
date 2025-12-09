@@ -30,9 +30,23 @@ jobs:
             echo ""
           fi
           
+          # API URLの検証
+          if [ "$API_URL" = "https://your-domain.com" ] || [ -z "$API_URL" ]; then
+            echo "❌ エラー: API_URLが設定されていません"
+            echo "GitHub SecretsにAPI_URLを設定してください。"
+            echo "設定方法: Settings → Secrets and variables → Actions → New repository secret"
+            echo "Name: API_URL"
+            echo "Value: アプリのURL（例: https://your-project.vercel.app）"
+            exit 1
+          fi
+          
           # 同期処理を実行
           echo "同期処理を実行中..."
-          response=$(curl -s -L -w "\n%{http_code}" -X POST "$API_URL/api/sync-kintone-users" \
+          echo "リクエストURL: $API_URL/api/sync-kintone-users"
+          
+          # curlでリダイレクトを追跡（-Lオプションでリダイレクトに従う）
+          # -wオプションで最終的なHTTPステータスコードを取得
+          response=$(curl -s -L -w "\n%{http_code}\n%{url_effective}" -X POST "$API_URL/api/sync-kintone-users" \
             -H "Content-Type: application/json" \
             -d '{
               "batchSize": 100,
@@ -45,19 +59,38 @@ jobs:
             }')
           
           # レスポンスとHTTPステータスコードを分離
-          http_code=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | sed '$d')
+          http_code=$(echo "$response" | tail -n2 | head -n1)
+          final_url=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d' | sed '$d')
           
           echo ""
           echo "HTTPステータス: $http_code"
+          echo "最終URL: $final_url"
           echo "レスポンス:"
-          echo "$body" | jq '.' 2>/dev/null || echo "$body"
+          if [ -n "$body" ]; then
+            echo "$body" | jq '.' 2>/dev/null || echo "$body"
+          else
+            echo "(レスポンスボディが空です)"
+          fi
           echo ""
           
           # エラーチェック
-          if [ "$http_code" -ne 200 ]; then
+          if [ -z "$http_code" ] || [ "$http_code" -ne 200 ]; then
             echo "❌ エラー: HTTPステータス $http_code"
-            echo "$body" | jq '.' 2>/dev/null || echo "$body"
+            if [ -n "$body" ]; then
+              echo "$body" | jq '.' 2>/dev/null || echo "$body"
+            fi
+            echo ""
+            echo "デバッグ情報:"
+            echo "  API_URL: $API_URL"
+            echo "  リクエストURL: $API_URL/api/sync-kintone-users"
+            echo "  最終URL: $final_url"
+            if [ "$http_code" = "302" ] || [ "$http_code" = "301" ]; then
+              echo ""
+              echo "⚠️  リダイレクトが発生しています。"
+              echo "   API_URLが正しく設定されているか確認してください。"
+              echo "   設定方法: Settings → Secrets and variables → Actions → New repository secret"
+            fi
             exit 1
           fi
           
