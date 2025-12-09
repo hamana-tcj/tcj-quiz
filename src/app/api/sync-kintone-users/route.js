@@ -489,6 +489,7 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
     success: true,
     totalProcessed: 0,
     totalCreated: 0,
+    totalUpdated: 0,
     totalSkipped: 0,
     totalFailed: 0,
     batches: [],
