@@ -297,11 +297,15 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
     // kintoneからレコード取得
     // 注意: テーブル型フィールドはクエリで直接検索できないため、
     // 全レコードを取得してからJavaScript側でフィルタリング
+    // フィルタリング後に必要な件数を確保するため、多めに取得（最大500件）
+    const fetchLimit = Math.max(batchSize * 5, 500); // フィルタリング後の件数を考慮して多めに取得
     const allRecords = await getKintoneRecords({
-      limit: batchSize * 2, // フィルタリング後に必要な件数を確保するため、多めに取得
+      limit: fetchLimit,
       offset: offset,
       query: query || '', // カスタムクエリが指定されている場合は使用
     });
+
+    console.log(`kintoneから取得: ${allRecords.length}件 (offset: ${offset}, limit: ${fetchLimit})`);
 
     if (allRecords.length === 0) {
       return Response.json({
@@ -341,21 +345,34 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
           email: extractEmailFromRecord(firstRecord, emailFieldCode),
           permissionGroup: firstRecord.permissionGroup ? '存在' : 'なし',
         });
+      } else if (beforeFilterCount > 0) {
+        // フィルタリングで0件になった場合、レコードの構造を確認
+        console.log('警告: フィルタリング後に0件になりました。レコード構造を確認:');
+        console.log('サンプルレコード:', JSON.stringify(allRecords[0], null, 2));
       }
     }
 
     // バッチサイズに合わせて切り詰め
-    records = records.slice(0, batchSize);
+    const recordsToProcess = records.slice(0, batchSize);
+    const remainingRecords = records.slice(batchSize);
 
-    if (records.length === 0) {
+    if (recordsToProcess.length === 0) {
+      // フィルタリング後に0件になった場合、次のバッチがあるかチェック
+      // kintoneから取得したレコード数がlimitと同じ場合、次のバッチがある可能性がある
+      const hasMoreRecords = allRecords.length >= fetchLimit;
+      
       return Response.json({
         ...results,
-        message: '条件に一致するレコードがありません',
+        message: hasMoreRecords 
+          ? '条件に一致するレコードがありません（次のバッチを確認）' 
+          : '条件に一致するレコードがありません',
+        hasMore: hasMoreRecords,
+        nextOffset: hasMoreRecords ? offset + allRecords.length : offset,
       });
     }
 
     // レコードIDとメールアドレスを抽出
-    const recordData = records
+    const recordData = recordsToProcess
       .map(record => {
         const email = extractEmailFromRecord(record, emailFieldCode);
         const recordId = extractRecordIdFromRecord(record);
@@ -445,9 +462,16 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
     results.errors = [...(results.errors || []), ...createResults.failed];
 
     // 次のバッチがあるかチェック
-    if (records.length === batchSize) {
+    // フィルタリング後の残りレコードがある場合、またはkintoneから取得したレコード数がlimitと同じ場合
+    const hasMoreFilteredRecords = remainingRecords.length > 0;
+    const hasMoreKintoneRecords = allRecords.length >= fetchLimit;
+    
+    if (hasMoreFilteredRecords || hasMoreKintoneRecords) {
       results.hasMore = true;
-      results.nextOffset = offset + batchSize;
+      // フィルタリング後の残りレコードがある場合は、現在のoffsetを維持
+      // ない場合は、取得したレコード数分オフセットを進める
+      results.nextOffset = hasMoreFilteredRecords ? offset : offset + allRecords.length;
+      console.log(`次のバッチがあります: offset=${results.nextOffset}, 残りフィルタ済み=${remainingRecords.length}件, kintone残り=${hasMoreKintoneRecords ? 'あり' : 'なし'}`);
     }
 
     const messageParts = [];
