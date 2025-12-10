@@ -91,15 +91,43 @@ export async function userExists(email) {
   }
 
   try {
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers();
-    
-    if (error) {
-      throw error;
-    }
-
     // メールアドレスを小文字に正規化して比較（大文字小文字を区別しない）
     const normalizedEmail = email?.toLowerCase().trim();
-    return data.users.some(user => user.email?.toLowerCase().trim() === normalizedEmail);
+    
+    // SupabaseのlistUsers()はページネーションを使用するため、全ユーザーを取得する必要がある
+    // 最大1000件ずつ取得して、全ユーザーをチェック
+    let page = 1;
+    const perPage = 1000;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+        page: page,
+        perPage: perPage,
+      });
+      
+      if (error) {
+        throw error;
+      }
+
+      // 現在のページでユーザーを検索
+      const found = data.users.some(user => user.email?.toLowerCase().trim() === normalizedEmail);
+      if (found) {
+        return true;
+      }
+
+      // 次のページがあるかチェック
+      hasMore = data.users.length === perPage;
+      page++;
+      
+      // 安全のため、最大10ページ（10,000件）までチェック
+      if (page > 10) {
+        console.warn(`⚠️ 警告: userExistsで10,000件を超えるユーザーをチェックしました。email=${normalizedEmail}`);
+        break;
+      }
+    }
+    
+    return false;
   } catch (error) {
     console.error('ユーザー存在チェックエラー:', error);
     throw error;
