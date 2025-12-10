@@ -210,6 +210,8 @@ export async function createUsersBatch(emailsOrRecords, skipExistenceCheck = fal
         userMetadata.kintone_record_id = String(kintoneRecordId);
       }
 
+      console.log(`[ユーザー作成試行] email=${normalizedEmail}, recordId=${kintoneRecordId || 'なし'}, skipCheck=${skipExistenceCheck}`);
+      
       const { data, error } = await supabaseAdmin.auth.admin.createUser({
         email: normalizedEmail,
         password: generateTempPassword(),
@@ -220,12 +222,17 @@ export async function createUsersBatch(emailsOrRecords, skipExistenceCheck = fal
       if (error) {
         // 既存ユーザーエラーの場合はスキップとして扱う
         const errorMessage = error.message || '';
+        const errorCode = error.code || error.status || '';
+        console.log(`[Supabase API エラー] email=${normalizedEmail}, code=${errorCode}, message=${errorMessage}`);
+        
         if (errorMessage.includes('already been registered') ||
             errorMessage.includes('already exists') ||
             errorMessage.includes('User already registered') ||
             errorMessage.includes('duplicate') ||
-            errorMessage.includes('email already')) {
-          console.log(`[既存ユーザー検出] email=${normalizedEmail} (作成時にエラーから検出: ${errorMessage})`);
+            errorMessage.includes('email already') ||
+            errorCode === 'user_already_registered' ||
+            errorCode === 'duplicate_email') {
+          console.log(`[既存ユーザー検出] email=${normalizedEmail} (作成時にエラーから検出: code=${errorCode}, message=${errorMessage})`);
           results.skipped.push({ 
             email: normalizedEmail, 
             reason: `既に存在します（作成時に検出: ${errorMessage})`,
@@ -233,10 +240,11 @@ export async function createUsersBatch(emailsOrRecords, skipExistenceCheck = fal
           continue;
         }
         // その他のエラーは失敗として扱う
-        console.error(`[ユーザー作成エラー] email=${normalizedEmail}, error=${errorMessage}`);
+        console.error(`[ユーザー作成エラー] email=${normalizedEmail}, code=${errorCode}, error=${errorMessage}`);
         throw error;
       }
 
+      console.log(`[ユーザー作成成功] email=${normalizedEmail}, userId=${data.user.id}, recordId=${kintoneRecordId || 'なし'}`);
       results.success.push({ email: normalizedEmail, userId: data.user.id, kintoneRecordId });
     } catch (error) {
       // 既存ユーザーエラーの場合はスキップとして扱う
