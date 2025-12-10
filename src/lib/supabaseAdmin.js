@@ -162,9 +162,10 @@ export async function createUserWithTempPassword(email, tempPassword = null, kin
 /**
  * 複数のユーザーを一括作成
  * @param {Array<string>|Array<Object>} emailsOrRecords - メールアドレス配列、または{email, kintoneRecordId}の配列
+ * @param {boolean} skipExistenceCheck - 既存ユーザーチェックをスキップするか（デフォルト: false）
  * @returns {Promise<Object>} 作成結果
  */
-export async function createUsersBatch(emailsOrRecords) {
+export async function createUsersBatch(emailsOrRecords, skipExistenceCheck = false) {
   if (!supabaseAdmin) {
     throw new Error('Supabase Adminクライアントが初期化されていません');
   }
@@ -190,10 +191,13 @@ export async function createUsersBatch(emailsOrRecords) {
       // メールアドレスを正規化
       const normalizedEmail = email?.toLowerCase().trim();
       
-      const exists = await userExists(normalizedEmail);
-      if (exists) {
-        results.skipped.push({ email: normalizedEmail, reason: '既に存在します' });
-        continue;
+      // 既存ユーザーチェック（skipExistenceCheckがfalseの場合のみ）
+      if (!skipExistenceCheck) {
+        const exists = await userExists(normalizedEmail);
+        if (exists) {
+          results.skipped.push({ email: normalizedEmail, reason: '既に存在します' });
+          continue;
+        }
       }
 
       // メタデータを構築
@@ -215,17 +219,21 @@ export async function createUsersBatch(emailsOrRecords) {
 
       if (error) {
         // 既存ユーザーエラーの場合はスキップとして扱う
-        if (error.message && (
-          error.message.includes('already been registered') ||
-          error.message.includes('already exists') ||
-          error.message.includes('User already registered')
-        )) {
+        const errorMessage = error.message || '';
+        if (errorMessage.includes('already been registered') ||
+            errorMessage.includes('already exists') ||
+            errorMessage.includes('User already registered') ||
+            errorMessage.includes('duplicate') ||
+            errorMessage.includes('email already')) {
+          console.log(`[既存ユーザー検出] email=${normalizedEmail} (作成時にエラーから検出: ${errorMessage})`);
           results.skipped.push({ 
             email: normalizedEmail, 
-            reason: '既に存在します（作成時に検出）',
+            reason: `既に存在します（作成時に検出: ${errorMessage})`,
           });
           continue;
         }
+        // その他のエラーは失敗として扱う
+        console.error(`[ユーザー作成エラー] email=${normalizedEmail}, error=${errorMessage}`);
         throw error;
       }
 

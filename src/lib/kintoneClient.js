@@ -20,12 +20,13 @@ const KINTONE_BASE_URL = `https://${KINTONE_SUBDOMAIN}.cybozu.com`;
 /**
  * kintoneからレコードを取得
  * @param {Object} options - 取得オプション
- * @param {number} options.limit - 取得件数（デフォルト: 500）
- * @param {number} options.offset - オフセット（デフォルト: 0）
+ * @param {number} options.limit - 取得件数（デフォルト: 500、最大: 500）
+ * @param {number} options.offset - オフセット（デフォルト: 0、最大: 10000）
  * @param {string} options.query - クエリ文字列（オプション）
+ * @param {number} options.minRecordId - 最小レコードID（offsetの代替として使用）
  * @returns {Promise<Array>} レコード配列
  */
-export async function getKintoneRecords({ limit = 500, offset = 0, query = '' } = {}) {
+export async function getKintoneRecords({ limit = 500, offset = 0, query = '', minRecordId = null } = {}) {
   if (!KINTONE_SUBDOMAIN || !KINTONE_API_TOKEN || !KINTONE_APP_ID) {
     throw new Error('kintone環境変数が設定されていません');
   }
@@ -43,6 +44,21 @@ export async function getKintoneRecords({ limit = 500, offset = 0, query = '' } 
   const params = new URLSearchParams();
   params.append('app', String(appId));
   
+  // kintone APIの制限: offsetは最大10,000件まで
+  // offsetが10,000を超える場合は、レコードIDを基準にした取得方法に切り替える
+  if (offset > 10000) {
+    console.warn(`⚠️ offset=${offset}が10,000を超えています。レコードIDベースの取得に切り替えます。`);
+    if (minRecordId) {
+      // レコードIDベースの取得
+      query = query || '';
+      const recordIdQuery = minRecordId ? `$id > ${minRecordId} and (${query || '1=1'})` : query;
+      query = recordIdQuery;
+      offset = 0; // offsetは使用しない
+    } else {
+      throw new Error(`offset=${offset}が10,000を超えています。minRecordIdを指定するか、別の方法で取得してください。`);
+    }
+  }
+
   // クエリ文字列を構築
   // kintone APIでは、クエリが空の場合は全件取得される
   // limit/offsetを使う場合は、クエリに含める必要がある
@@ -51,7 +67,11 @@ export async function getKintoneRecords({ limit = 500, offset = 0, query = '' } 
     // デフォルトクエリ: レコードIDでソートしてlimitとoffsetを指定
     // kintone APIのクエリ構文では、order by句が必要な場合がある
     // ただし、$idフィールドは常に存在するため、これを使用
-    queryString = `order by $id asc limit ${limit} offset ${offset}`;
+    if (minRecordId) {
+      queryString = `$id > ${minRecordId} order by $id asc limit ${limit}`;
+    } else {
+      queryString = `order by $id asc limit ${limit} offset ${offset}`;
+    }
   } else {
     // 既存のクエリにlimitとoffsetを追加（まだ含まれていない場合）
     const hasLimit = /limit\s+\d+/i.test(queryString);
@@ -60,7 +80,7 @@ export async function getKintoneRecords({ limit = 500, offset = 0, query = '' } 
     if (!hasLimit) {
       queryString += ` limit ${limit}`;
     }
-    if (!hasOffset) {
+    if (!hasOffset && !minRecordId) {
       queryString += ` offset ${offset}`;
     }
   }

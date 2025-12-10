@@ -461,9 +461,16 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
     }
 
     // 新規ユーザーを作成
+    // 注意: syncBatchで既に既存ユーザーチェックを行っているため、
+    // createUsersBatchでは既存ユーザーチェックをスキップする
     console.log(`[ユーザー作成開始] ${recordsToCreate.length}件の新規ユーザーを作成します`);
-    const createResults = await createUsersBatch(recordsToCreate);
+    const createResults = await createUsersBatch(recordsToCreate, true); // skipExistenceCheck=true
     console.log(`[ユーザー作成完了] 成功=${createResults.success.length}件, スキップ=${createResults.skipped.length}件, 失敗=${createResults.failed.length}件`);
+    
+    // 既存ユーザーエラーをスキップとして扱う（createUsersBatch内で検出された場合）
+    if (createResults.skipped.length > 0) {
+      console.warn(`⚠️ 警告: ${createResults.skipped.length}件のユーザーが既に存在していました（createUsersBatch内で検出）`);
+    }
 
     // 結果を集計
     // 既存ユーザーエラーをスキップとして扱う（失敗から除外）
@@ -496,15 +503,34 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
     const hasMoreFilteredRecords = remainingRecords.length > 0;
     const hasMoreKintoneRecords = allRecords.length >= fetchLimit;
     
+    // kintone APIの制限: offsetは最大10,000件まで
+    // offsetが10,000を超える場合は、レコードIDベースの取得に切り替える
+    const nextOffset = offset + allRecords.length;
+    const useRecordIdBased = nextOffset > 10000;
+    
     if (hasMoreFilteredRecords || hasMoreKintoneRecords) {
       results.hasMore = true;
-      // フィルタリング後の残りレコードがある場合でも、kintoneから取得したレコード数分オフセットを進める
-      // これにより、次回は新しいレコードを取得できる
-      // ただし、残りレコードがある場合は、それらを処理するためにoffsetを維持する必要がある
-      // しかし、全件処理モードでは、次のバッチで新しいレコードを取得する方が効率的
-      // そのため、常に取得したレコード数分オフセットを進める
-      results.nextOffset = offset + allRecords.length;
-      console.log(`次のバッチがあります: offset=${offset} → nextOffset=${results.nextOffset}, 取得レコード数=${allRecords.length}, 残りフィルタ済み=${remainingRecords.length}件, kintone残り=${hasMoreKintoneRecords ? 'あり' : 'なし'}`);
+      
+      if (useRecordIdBased) {
+        // レコードIDベースの取得に切り替え
+        // 最後に取得したレコードのIDを取得
+        const lastRecordId = allRecords.length > 0 
+          ? extractRecordIdFromRecord(allRecords[allRecords.length - 1])
+          : null;
+        
+        if (lastRecordId) {
+          // レコードIDをnextOffsetとして使用（文字列として保存）
+          results.nextOffset = `id:${lastRecordId}`;
+          console.log(`⚠️ offsetが10,000を超えるため、レコードIDベースの取得に切り替えます: offset=${offset} → nextRecordId=${lastRecordId}`);
+        } else {
+          // レコードIDが取得できない場合は、offsetを維持（エラーになる可能性がある）
+          results.nextOffset = nextOffset;
+          console.warn(`⚠️ レコードIDが取得できませんでした。offset=${nextOffset}で続行しますが、エラーになる可能性があります。`);
+        }
+      } else {
+        results.nextOffset = nextOffset;
+        console.log(`次のバッチがあります: offset=${offset} → nextOffset=${results.nextOffset}, 取得レコード数=${allRecords.length}, 残りフィルタ済み=${remainingRecords.length}件, kintone残り=${hasMoreKintoneRecords ? 'あり' : 'なし'}`);
+      }
     } else {
       console.log(`次のバッチはありません: offset=${offset}, 取得レコード数=${allRecords.length}, フィルタ済み=${records.length}件`);
     }
@@ -607,8 +633,13 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
       hasMore = result.hasMore === true;
       if (hasMore) {
         const previousOffset = currentOffset;
-        currentOffset = result.nextOffset || (currentOffset + batchSize);
+        currentOffset = result.nextOffset || (typeof currentOffset === 'number' ? currentOffset + batchSize : 0);
         console.log(`バッチ ${batchCount} 完了: offset ${previousOffset} → ${currentOffset}, hasMore=${hasMore}`);
+        
+        // offsetが10,000を超える場合は警告
+        if (typeof currentOffset === 'number' && currentOffset > 10000) {
+          console.warn(`⚠️ offset=${currentOffset}が10,000を超えています。次のバッチでレコードIDベースの取得に切り替わります。`);
+        }
       } else {
         console.log(`バッチ ${batchCount} 完了: 次のバッチはありません (offset: ${currentOffset})`);
       }

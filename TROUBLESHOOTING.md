@@ -1,200 +1,145 @@
 # トラブルシューティングガイド
 
-## Supabaseにアカウントが追加されない場合の確認方法
+## kintone APIの制限について
 
-### 1. GitHub Actionsの実行状況を確認
+### offsetの上限（10,000件）
 
-1. GitHubリポジトリの「Actions」タブを開く
-2. 「Sync kintone users to Supabase」ワークフローを選択
-3. 最新の実行履歴を確認
-   - ✅ 緑色のチェックマーク: 正常に実行された
-   - ❌ 赤色のX: エラーが発生した
-   - ⏸️ 黄色の丸: 実行中または待機中
+kintone APIの`offset`パラメータには**10,000件の上限**があります。この制限を超えると、APIリクエストが正常に処理されなくなる可能性があります。
 
-### 2. 実行ログを確認
+**症状:**
+- offsetが10,000を超えるとエラーが発生する
+- 52件しか取得されない（フィルタリング後のレコード数が少ない）
 
-GitHub Actionsの実行ログで以下を確認：
+**解決策:**
+- offsetが10,000を超える場合は、レコードIDベースの取得に自動的に切り替わります
+- ログに `⚠️ offsetが10,000を超えるため、レコードIDベースの取得に切り替えます` と表示されます
 
-- **HTTPステータス**: 200であること
-- **処理結果**: `created`（作成件数）が0より大きいこと
-- **エラーメッセージ**: エラーが発生している場合は詳細を確認
+### フィルタリング後のレコード数が少ない
 
-#### よくあるエラー
+kintoneから500件取得しても、フィルタリング後に52件しか残らない場合があります。
 
-**`API_URLがデフォルト値です`**
-- 原因: GitHub Secretsに`API_URL`が設定されていない
-- 解決方法: 
-  1. GitHubリポジトリの「Settings」→「Secrets and variables」→「Actions」
-  2. 「New repository secret」をクリック
-  3. Name: `API_URL`, Value: アプリのURL（例: `https://your-domain.com`）
-  4. 「Add secret」をクリック
+**原因:**
+- `permissionGroup.groupName`の条件に一致するレコードが少ない
+- kintoneから取得したレコードの多くが条件に一致しない
 
-**`Supabase Adminクライアントが初期化されていません`**
-- 原因: Vercelの環境変数が設定されていない、または再デプロイされていない
-- 解決方法: 
-  1. Vercelダッシュボードで環境変数を設定
-  2. **重要**: 環境変数を設定した後は、必ず再デプロイが必要です
-  3. 必要な環境変数:
-     - `NEXT_PUBLIC_SUPABASE_URL`
-     - `SUPABASE_SERVICE_ROLE_KEY`
-     - `KINTONE_SUBDOMAIN`
-     - `KINTONE_API_TOKEN`
-     - `KINTONE_APP_ID`
+**確認方法:**
+1. Vercelのログで以下を確認：
+   ```
+   [フィルタリング] 500件 → 52件 (条件に一致したレコード数)
+   ```
+2. kintoneアプリで、条件に一致するレコードが実際に存在するか確認
 
-**`kintone環境変数が設定されていません`**
-- 原因: 本番環境の環境変数が設定されていない
-- 解決方法: Vercelやデプロイ先の環境変数を確認
+## 自動同期が停止している場合
 
-**`kintone API エラー: 400`**
-- 原因: kintone APIの接続エラー
-- 解決方法: 
-  - kintoneのAPIトークンが正しいか確認
-  - アプリIDが正しいか確認
-  - サブドメインが正しいか確認
+### GitHub Actionsの実行状況を確認
 
-### 3. 手動でテスト実行
+1. **GitHubリポジトリにアクセス**
+   - [https://github.com](https://github.com) にアクセス
+   - リポジトリを選択
 
-#### 方法1: GitHub Actionsから手動実行
+2. **Actionsタブを開く**
+   - 左側のメニューから「**Actions**」を選択
+   - 「**Sync kintone users to Supabase**」ワークフローを選択
 
-1. GitHubリポジトリの「Actions」タブを開く
-2. 「Sync kintone users to Supabase」ワークフローを選択
-3. 右側の「Run workflow」ボタンをクリック
-4. 「Run workflow」をクリック
+3. **実行履歴を確認**
+   - 最新の実行が成功しているか確認
+   - エラーが発生している場合は、ログを確認
 
-#### 方法2: APIエンドポイントを直接呼び出し
+4. **手動実行で確認**
+   - 「**Run workflow**」ボタンをクリック
+   - 手動実行で動作を確認
 
-```bash
-curl -X POST https://your-domain.com/api/sync-kintone-users \
-  -H "Content-Type: application/json" \
-  -d '{
-    "batchSize": 100,
-    "offset": 0,
-    "emailFieldCode": "email",
-    "query": "",
-    "processAll": true,
-    "maxBatches": 50,
-    "deleteOrphanedUsers": true
-  }'
-```
+### よくある原因
 
-#### 方法3: ブラウザからテスト
+1. **GitHub Actionsの実行が失敗している**
+   - エラーログを確認
+   - 環境変数が正しく設定されているか確認
 
-`public/test-sync.html`を開いて、ブラウザからテストできます。
+2. **Vercelのタイムアウト**
+   - 処理時間が60秒を超えている
+   - `stoppedReason: "timeout"` が表示される
 
-### 4. kintoneのレコードを確認
+3. **kintone APIのレート制限**
+   - 1時間あたりのリクエスト数が上限を超えている
+   - エラーログに `429 Too Many Requests` が表示される
 
-以下の条件を満たすレコードが存在するか確認：
+## デバッグ方法
 
-- `permissionGroup`テーブル型フィールドが存在する
-- `permissionGroup`内の`groupName`フィールドに以下のいずれかが含まれている：
-  - `試験対策集中講座（養成）`
-  - `合格パック単体（養成）`
-- `email`フィールドに有効なメールアドレスが設定されている
+### 1. Vercelのログを確認
 
-### 5. Supabaseのユーザーを確認
+1. **Vercelダッシュボードにログイン**
+   - [https://vercel.com](https://vercel.com) にアクセス
+   - プロジェクトを選択
 
-1. Supabaseダッシュボードを開く
-2. 「Authentication」→「Users」を開く
-3. ユーザーが作成されているか確認
+2. **ログを確認**
+   - 左側のメニューから「**Logs**」を選択
+   - `/api/sync-kintone-users` を選択
+   - リアルタイムログを確認
 
-### 6. ログを確認
+### 2. Supabase Authで全ユーザーを確認
 
-#### 本番環境のログ
+1. **APIエンドポイントにアクセス**
+   ```
+   https://your-domain.vercel.app/api/list-all-users
+   ```
 
-- Vercelの場合: Vercelダッシュボードの「Functions」タブでログを確認
-- その他の場合: デプロイ先のログ機能を使用
+2. **ユーザー数を確認**
+   - `total`: 全ユーザー数
+   - `usersWithKintoneId`: kintoneレコードIDがあるユーザー数
+   - `usersWithoutKintoneId`: kintoneレコードIDがないユーザー数
 
-#### ログに出力される情報
+### 3. kintoneアプリでレコードを確認
 
-- 開始時刻
-- リクエストパラメータ
-- フィルタリング結果（条件に一致したレコード数）
-- 処理結果（作成、スキップ、失敗件数）
-- エラー詳細（エラーが発生した場合）
+1. **kintoneアプリにアクセス**
+   - アプリID: 846（設定値に応じて変更）
 
-### 7. よくある問題と解決方法
+2. **条件に一致するレコードを確認**
+   - `permissionGroup.groupName`が「試験対策集中講座（養成）」または「合格パック単体（養成）」のレコードが存在するか確認
 
-#### 問題: 条件に一致するレコードがない
+## エラーメッセージと対処法
 
-**症状**: `processed: 0` または `条件に一致するレコードがありません`
+### "kintone API エラー: 400 - Invalid request"
 
-**確認方法**:
-```bash
-# kintone接続テスト
-curl https://your-domain.com/api/sync-kintone-users?test=kintone
-```
+**原因:**
+- クエリ構文が正しくない
+- offsetが10,000を超えている
 
-**解決方法**:
-- kintoneのレコードを確認
-- `permissionGroup`の構造が正しいか確認
-- `groupName`の値が完全一致しているか確認（スペースや全角/半角に注意）
+**対処法:**
+- クエリ構文を確認
+- offsetが10,000を超える場合は、レコードIDベースの取得に自動的に切り替わります
 
-#### 問題: 既にユーザーが存在するためスキップされる
+### "Supabase Adminクライアントが初期化されていません"
 
-**症状**: `created: 0, skipped: X`
+**原因:**
+- 環境変数`SUPABASE_SERVICE_ROLE_KEY`が設定されていない
 
-**確認方法**: Supabaseのユーザー一覧で既にユーザーが存在するか確認
+**対処法:**
+- Vercelの環境変数を確認
+- `.env.local`ファイルを確認（ローカル環境の場合）
 
-**解決方法**: これは正常な動作です。既存ユーザーはスキップされます。
+### "FUNCTION_INVOCATION_TIMEOUT"
 
-#### 問題: 通常モードで1バッチしか処理されない
+**原因:**
+- Vercelの関数実行時間が60秒を超えている
 
-**症状**: `hasMore: true` だが処理が止まる
+**対処法:**
+- `maxBatches`を減らす（例: 10 → 5）
+- `batchSize`を減らす（例: 50 → 25）
 
-**解決方法**: GitHub Actionsのワークフローで`processAll: true`を設定（既に設定済み）
+## パフォーマンス最適化
 
-### 8. デバッグ用エンドポイント
+### 1. バッチサイズの調整
 
-#### kintone接続テスト
+- `batchSize`: 1回の処理件数（デフォルト: 50）
+- `maxBatches`: 最大バッチ数（デフォルト: 10）
+- タイムアウトが発生する場合は、これらの値を減らす
 
-```bash
-GET https://your-domain.com/api/sync-kintone-users?test=kintone
-```
+### 2. フィルタリングの最適化
 
-#### 通常の同期処理
+- kintoneアプリで条件に一致するレコードが少ない場合、フィルタリング後のレコード数が少なくなります
+- これは正常な動作です
 
-```bash
-POST https://your-domain.com/api/sync-kintone-users
-Content-Type: application/json
+### 3. レコードIDベースの取得
 
-{
-  "batchSize": 100,
-  "offset": 0,
-  "emailFieldCode": "email",
-  "query": "",
-  "processAll": true,
-  "maxBatches": 50,
-  "deleteOrphanedUsers": true
-}
-```
-
-### 9. 環境変数の確認
-
-以下の環境変数が正しく設定されているか確認：
-
-- `KINTONE_SUBDOMAIN`: kintoneのサブドメイン
-- `KINTONE_API_TOKEN`: kintoneのAPIトークン
-- `KINTONE_APP_ID`: kintoneのアプリID
-- `NEXT_PUBLIC_SUPABASE_URL`: SupabaseのURL
-- `SUPABASE_SERVICE_ROLE_KEY`: SupabaseのService Role Key
-
-#### Vercelでの環境変数設定方法
-
-1. Vercelダッシュボードにログイン
-2. プロジェクトを選択
-3. 「Settings」→「Environment Variables」を開く
-4. 上記の環境変数を追加
-5. **重要**: 環境変数を追加・変更した後は、再デプロイが必要です
-
-詳細は`README.md`の「Vercel（本番環境）での設定方法」を参照してください。
-
-### 10. サポートが必要な場合
-
-以下の情報を準備してサポートに連絡：
-
-1. GitHub Actionsの実行ログ（スクリーンショット）
-2. APIエンドポイントのレスポンス（JSON）
-3. kintoneのレコード例（個人情報を除く）
-4. エラーメッセージの全文
-5. 実行時刻（UTCと日本時間）
-
+- offsetが10,000を超える場合は、レコードIDベースの取得に自動的に切り替わります
+- これにより、大量のレコードを処理できます
