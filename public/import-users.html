@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ユーザー一括登録（CSV）</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+    }
+    input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      border: 2px dashed #ddd;
+      border-radius: 4px;
+      background: #fafafa;
+      cursor: pointer;
+    }
+    input[type="file"]:hover {
+      border-color: #0070f3;
+      background: #f0f7ff;
+    }
+    button {
+      background: #0070f3;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #0051cc;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .example {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 20px;
+      font-size: 13px;
+    }
+    .example h3 {
+      margin-top: 0;
+      font-size: 14px;
+    }
+    .example code {
+      background: #e9ecef;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+    .result {
+      margin-top: 30px;
+      padding: 20px;
+      border-radius: 4px;
+      display: none;
+    }
+    .result.success {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+    }
+    .result.error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+    .result h3 {
+      margin-top: 0;
+    }
+    .result table {
+      width: 100%;
+      margin-top: 15px;
+      border-collapse: collapse;
+    }
+    .result table th,
+    .result table td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    .result table th {
+      background: rgba(0,0,0,0.05);
+      font-weight: 600;
+    }
+    .loading {
+      display: none;
+      text-align: center;
+      margin-top: 20px;
+    }
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #0070f3;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ユーザー一括登録（CSV）</h1>
+    <p class="subtitle">CSVファイルをアップロードして、Supabase Authにユーザーを一括登録します</p>
+
+    <form id="uploadForm">
+      <div class="form-group">
+        <label for="csvFile">CSVファイルを選択</label>
+        <input type="file" id="csvFile" name="file" accept=".csv" required>
+      </div>
+      <button type="submit" id="submitBtn">アップロードして登録</button>
+    </form>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>処理中...</p>
+    </div>
+
+    <div class="result" id="result"></div>
+
+    <div class="example">
+      <h3>CSV形式の例</h3>
+      <p><strong>形式1: メールアドレスのみ</strong></p>
+      <code>
+        email<br>
+        user1@example.com<br>
+        user2@example.com<br>
+        user3@example.com
+      </code>
+      
+      <p style="margin-top: 15px;"><strong>形式2: メールアドレス + kintoneレコードID</strong></p>
+      <code>
+        email,kintone_record_id<br>
+        user1@example.com,123<br>
+        user2@example.com,456<br>
+        user3@example.com,789
+      </code>
+
+      <p style="margin-top: 15px; color: #666; font-size: 12px;">
+        <strong>注意事項:</strong><br>
+        • 1行目はヘッダー行（email, kintone_record_id）<br>
+        • 2行目以降がデータ行<br>
+        • 既存ユーザーは自動的にスキップされます<br>
+        • 無効なメールアドレスはエラーとして記録されます
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const fileInput = document.getElementById('csvFile');
+    const submitBtn = document.getElementById('submitBtn');
+    const loading = document.getElementById('loading');
+    const result = document.getElementById('result');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const file = fileInput.files[0];
+      if (!file) {
+        alert('CSVファイルを選択してください');
+        return;
+      }
+
+      // UI更新
+      submitBtn.disabled = true;
+      loading.style.display = 'block';
+      result.style.display = 'none';
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/import-users-csv', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const data = await response.json();
+
+        // 結果表示
+        loading.style.display = 'none';
+        result.style.display = 'block';
+        result.className = 'result ' + (data.success ? 'success' : 'error');
+
+        if (data.success) {
+          result.innerHTML = `
+            <h3>✅ 登録完了</h3>
+            <p><strong>処理時間:</strong> ${data.duration}</p>
+            <table>
+              <tr>
+                <th>項目</th>
+                <th>件数</th>
+              </tr>
+              <tr>
+                <td>総件数</td>
+                <td>${data.total}件</td>
+              </tr>
+              <tr>
+                <td>作成</td>
+                <td>${data.created}件</td>
+              </tr>
+              <tr>
+                <td>スキップ（既存）</td>
+                <td>${data.skipped}件</td>
+              </tr>
+              <tr>
+                <td>失敗</td>
+                <td>${data.failed}件</td>
+              </tr>
+            </table>
+            ${data.errors && data.errors.length > 0 ? `
+              <h4 style="margin-top: 20px;">エラー詳細（最初の10件）</h4>
+              <table>
+                <tr>
+                  <th>行番号/メールアドレス</th>
+                  <th>エラー内容</th>
+                </tr>
+                ${data.errors.slice(0, 10).map(e => `
+                  <tr>
+                    <td>${e.line || e.email || '-'}</td>
+                    <td>${e.error || e.reason || '-'}</td>
+                  </tr>
+                `).join('')}
+              </table>
+            ` : ''}
+          `;
+        } else {
+          result.innerHTML = `
+            <h3>❌ エラー</h3>
+            <p>${data.error || '登録処理中にエラーが発生しました'}</p>
+          `;
+        }
+      } catch (error) {
+        loading.style.display = 'none';
+        result.style.display = 'block';
+        result.className = 'result error';
+        result.innerHTML = `
+          <h3>❌ エラー</h3>
+          <p>${error.message || 'リクエストの送信に失敗しました'}</p>
+        `;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
+

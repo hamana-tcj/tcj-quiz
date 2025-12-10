@@ -589,6 +589,90 @@ Supabaseダッシュボードで以下の設定を行います：
    curl http://localhost:3000/api/list-all-users | jq .
    ```
 
+## CSV一括登録機能（バックアップ手段）
+
+自動同期がうまくいかない場合の代替手段として、CSVファイルからユーザーを一括登録する機能を用意しています。
+
+### 使用方法
+
+#### 方法1: Webインターフェースを使用（推奨）
+
+1. **HTMLページにアクセス**
+   ```
+   https://your-domain.vercel.app/import-users.html
+   ```
+
+2. **CSVファイルを準備**
+   - 形式1: メールアドレスのみ
+     ```csv
+     email
+     user1@example.com
+     user2@example.com
+     ```
+   - 形式2: メールアドレス + kintoneレコードID
+     ```csv
+     email,kintone_record_id
+     user1@example.com,123
+     user2@example.com,456
+     ```
+
+3. **CSVファイルをアップロード**
+   - 「CSVファイルを選択」ボタンをクリック
+   - CSVファイルを選択
+   - 「アップロードして登録」ボタンをクリック
+
+4. **結果を確認**
+   - 登録結果が表示されます
+   - 作成件数、スキップ件数、失敗件数が表示されます
+
+#### 方法2: APIエンドポイントを直接使用
+
+1. **curlコマンドで実行**
+   ```bash
+   curl -X POST https://your-domain.vercel.app/api/import-users-csv \
+     -F "file=@users.csv"
+   ```
+
+2. **レスポンスの確認**
+   ```json
+   {
+     "success": true,
+     "total": 100,
+     "created": 95,
+     "skipped": 5,
+     "failed": 0,
+     "errors": [],
+     "duration": "10.52秒"
+   }
+   ```
+
+### CSV形式の詳細
+
+- **ヘッダー行**: 1行目に `email` または `email,kintone_record_id` を記述
+- **データ行**: 2行目以降にメールアドレス（とkintoneレコードID）を記述
+- **文字コード**: UTF-8を推奨
+- **区切り文字**: カンマ（`,`）
+
+### 注意事項
+
+- 既存ユーザーは自動的にスキップされます
+- 無効なメールアドレスはエラーとして記録されます
+- 大量のユーザーを登録する場合、処理に時間がかかる場合があります
+- kintoneレコードIDはオプションです（指定しない場合は `null` になります）
+
+### トラブルシューティング
+
+- **「CSVファイルがアップロードされていません」エラー**
+  - ファイルが正しく選択されているか確認してください
+
+- **「CSVファイルに"email"列が見つかりません」エラー**
+  - ヘッダー行に `email` 列が含まれているか確認してください
+  - 大文字小文字は区別されません
+
+- **「無効なメールアドレス形式です」エラー**
+  - メールアドレスの形式を確認してください
+  - スペースや特殊文字が含まれていないか確認してください
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
