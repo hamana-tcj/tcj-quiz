@@ -503,6 +503,92 @@ Supabaseダッシュボードで以下の設定を行います：
 - SMTP設定後、メール送信が正常に動作するかテストしてください
 - 送信元メールアドレスは、SMTPプロバイダーで認証済みのアドレスを使用してください
 
+## デバッグ・確認方法
+
+### Vercelのログを確認する方法
+
+1. **Vercelダッシュボードにログイン**
+   - [https://vercel.com](https://vercel.com) にアクセス
+   - プロジェクトを選択
+
+2. **ログを確認**
+   - 左側のメニューから「**Logs**」を選択
+   - または、プロジェクトの「**Deployments**」タブから最新のデプロイメントを選択
+   - 「**Functions**」タブを開く
+   - `/api/sync-kintone-users` を選択
+
+3. **リアルタイムログを確認**
+   - 「**Real-time Logs**」タブを開くと、リアルタイムでログを確認できます
+   - フィルタリング機能を使用して、特定のログを検索できます
+
+4. **ログの見方**
+   - `console.log()` で出力したログが表示されます
+   - エラーログは赤色で表示されます
+   - タイムスタンプと一緒に表示されます
+
+### Supabase Authで全ユーザーを確認する方法
+
+#### 方法1: APIエンドポイントを使用（推奨）
+
+デバッグ用のAPIエンドポイント `/api/list-all-users` を作成しました。
+
+**使用方法:**
+
+1. **ブラウザでアクセス**
+   ```
+   https://your-domain.vercel.app/api/list-all-users
+   ```
+
+2. **curlコマンドで確認**
+   ```bash
+   curl https://your-domain.vercel.app/api/list-all-users
+   ```
+
+3. **レスポンスの内容**
+   - `total`: 全ユーザー数
+   - `usersWithKintoneId`: kintoneレコードIDがあるユーザー数
+   - `usersWithoutKintoneId`: kintoneレコードIDがないユーザー数
+   - `users`: 全ユーザーの詳細情報
+   - `usersWithKintoneIdDetails`: kintoneレコードIDがあるユーザーの詳細
+   - `usersWithoutKintoneIdDetails`: kintoneレコードIDがないユーザーの詳細
+
+#### 方法2: Supabaseダッシュボードで確認
+
+1. **Supabaseダッシュボードにログイン**
+   - [https://supabase.com](https://supabase.com) にアクセス
+   - プロジェクトを選択
+
+2. **Authentication設定を開く**
+   - 左側のメニューから「**Authentication**」を選択
+   - 「**Users**」タブを開く
+
+3. **ユーザー一覧を確認**
+   - 全ユーザーが表示されます
+   - 検索機能を使用して、特定のユーザーを検索できます
+   - 各ユーザーをクリックすると、詳細情報（`user_metadata`など）を確認できます
+
+4. **注意事項**
+   - Supabaseダッシュボードでは、一度に表示できるユーザー数に制限がある場合があります
+   - 大量のユーザーがいる場合は、APIエンドポイントを使用することを推奨します
+
+#### 方法3: ローカル環境で確認
+
+1. **開発サーバーを起動**
+   ```bash
+   npm run dev
+   ```
+
+2. **APIエンドポイントにアクセス**
+   ```
+   http://localhost:3000/api/list-all-users
+   ```
+
+3. **JSON形式で確認**
+   - ブラウザで表示するか、`jq`コマンドを使用して整形できます
+   ```bash
+   curl http://localhost:3000/api/list-all-users | jq .
+   ```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
