@@ -167,6 +167,12 @@ export default function LoginPage() {
               <p className="text-sm mb-2" style={{ color: 'var(--text-primary)' }}>
                 パスワード設定用のURLを記載したメールを送ります。
               </p>
+              <div className="text-sm mb-2" style={{ color: 'var(--text-primary)' }}>
+                <p className="mb-1">件名：【パスワード設定】「一問一答1500」日本語教員試験 短期合格パック</p>
+                <p className="mb-1">差出人：Supabase Auth</p>
+                <p className="mb-1">でパスワード変更サイトのリンク付メールが送信されます。</p>
+                <p className="mb-1">メールが届かない場合は迷惑メールフォルダもご確認ください。</p>
+              </div>
               <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
                 MYページログイン時のアドレスを入力してください
               </p>
