@@ -99,6 +99,7 @@ export async function userExists(email) {
     let page = 1;
     const perPage = 1000;
     let hasMore = true;
+    let totalChecked = 0;
     
     while (hasMore) {
       const { data, error } = await supabaseAdmin.auth.admin.listUsers({
@@ -107,26 +108,42 @@ export async function userExists(email) {
       });
       
       if (error) {
+        console.error(`[userExists] ページ${page}の取得エラー:`, error);
         throw error;
       }
 
+      // データが空の場合は終了
+      if (!data || !data.users || data.users.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      totalChecked += data.users.length;
+
       // 現在のページでユーザーを検索
-      const found = data.users.some(user => user.email?.toLowerCase().trim() === normalizedEmail);
+      const found = data.users.some(user => {
+        const userEmail = user.email?.toLowerCase().trim();
+        return userEmail === normalizedEmail;
+      });
+      
       if (found) {
+        console.log(`[userExists] ユーザー発見: email=${normalizedEmail}, チェック件数=${totalChecked}件`);
         return true;
       }
 
       // 次のページがあるかチェック
+      // SupabaseのlistUsers()は、取得したユーザー数がperPage未満の場合、次のページがないことを示す
       hasMore = data.users.length === perPage;
       page++;
       
       // 安全のため、最大10ページ（10,000件）までチェック
       if (page > 10) {
-        console.warn(`⚠️ 警告: userExistsで10,000件を超えるユーザーをチェックしました。email=${normalizedEmail}`);
+        console.warn(`⚠️ 警告: userExistsで10,000件を超えるユーザーをチェックしました。email=${normalizedEmail}, チェック件数=${totalChecked}件`);
         break;
       }
     }
     
+    console.log(`[userExists] ユーザー未発見: email=${normalizedEmail}, チェック件数=${totalChecked}件`);
     return false;
   } catch (error) {
     console.error('ユーザー存在チェックエラー:', error);
