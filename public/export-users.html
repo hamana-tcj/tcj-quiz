@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supabase Auth ユーザーエクスポート</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+    }
+    select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+      background: white;
+    }
+    button {
+      background: #0070f3;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #0051cc;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .info {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 20px;
+      font-size: 13px;
+    }
+    .info h3 {
+      margin-top: 0;
+      font-size: 14px;
+    }
+    .loading {
+      display: none;
+      text-align: center;
+      margin-top: 20px;
+    }
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #0070f3;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .result {
+      margin-top: 30px;
+      padding: 20px;
+      border-radius: 4px;
+      display: none;
+    }
+    .result.success {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+    }
+    .result.error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Supabase Auth ユーザーエクスポート</h1>
+    <p class="subtitle">Supabase Authに登録されている全ユーザーのメールアドレスをCSV形式でエクスポートします</p>
+
+    <form id="exportForm">
+      <div class="form-group">
+        <label for="format">エクスポート形式</label>
+        <select id="format" name="format">
+          <option value="simple">シンプル形式（メールアドレスのみ）</option>
+          <option value="full">フル形式（メールアドレス + kintoneレコードID）</option>
+        </select>
+      </div>
+      <button type="submit" id="exportBtn">CSVファイルをダウンロード</button>
+    </form>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>処理中...</p>
+    </div>
+
+    <div class="result" id="result"></div>
+
+    <div class="info">
+      <h3>エクスポート形式について</h3>
+      <p><strong>シンプル形式:</strong></p>
+      <code>
+        email<br>
+        user1@example.com<br>
+        user2@example.com
+      </code>
+      
+      <p style="margin-top: 15px;"><strong>フル形式:</strong></p>
+      <code>
+        email,kintone_record_id<br>
+        user1@example.com,123<br>
+        user2@example.com,456
+      </code>
+
+      <p style="margin-top: 15px; color: #666; font-size: 12px;">
+        <strong>注意事項:</strong><br>
+        • ファイル名は自動的に「users-YYYY-MM-DD.csv」となります<br>
+        • 文字コードはUTF-8です<br>
+        • 大量のユーザーがいる場合、ダウンロードに時間がかかる場合があります
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('exportForm');
+    const formatSelect = document.getElementById('format');
+    const exportBtn = document.getElementById('exportBtn');
+    const loading = document.getElementById('loading');
+    const result = document.getElementById('result');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const format = formatSelect.value;
+
+      // UI更新
+      exportBtn.disabled = true;
+      loading.style.display = 'block';
+      result.style.display = 'none';
+
+      try {
+        // CSVファイルをダウンロード
+        const url = `/api/export-users-csv?format=${format}`;
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'エラーが発生しました' }));
+          throw new Error(errorData.error || 'エクスポートに失敗しました');
+        }
+
+        // レスポンスからファイル名を取得（Content-Dispositionヘッダーから）
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'users.csv';
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+          if (filenameMatch) {
+            filename = filenameMatch[1];
+          }
+        }
+
+        // Blobとして取得
+        const blob = await response.blob();
+
+        // ダウンロードリンクを作成
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(downloadUrl);
+
+        // 成功メッセージを表示
+        loading.style.display = 'none';
+        result.style.display = 'block';
+        result.className = 'result success';
+        result.innerHTML = `
+          <h3>✅ エクスポート完了</h3>
+          <p>CSVファイル「${filename}」をダウンロードしました。</p>
+        `;
+      } catch (error) {
+        loading.style.display = 'none';
+        result.style.display = 'block';
+        result.className = 'result error';
+        result.innerHTML = `
+          <h3>❌ エラー</h3>
+          <p>${error.message || 'エクスポート処理中にエラーが発生しました'}</p>
+        `;
+      } finally {
+        exportBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
+
