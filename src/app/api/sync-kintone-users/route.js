@@ -363,6 +363,25 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
           groupNames: groupNames,
         });
       }
+      
+      // 統計情報: フィルタリング条件に一致しないレコードの理由を分析
+      if (beforeFilterCount > 0 && records.length < beforeFilterCount) {
+        const filteredOut = beforeFilterCount - records.length;
+        const noPermissionGroup = allRecords.filter(r => !r.permissionGroup || !r.permissionGroup.value || !Array.isArray(r.permissionGroup.value)).length;
+        const hasPermissionGroupButNoMatch = allRecords.filter(r => {
+          const pg = r.permissionGroup;
+          if (!pg || !pg.value || !Array.isArray(pg.value)) return false;
+          const hasMatch = pg.value.some(row => {
+            const groupName = row.value?.groupName?.value;
+            return groupName === '試験対策集中講座（養成）' || groupName === '合格パック単体（養成）';
+          });
+          return !hasMatch;
+        }).length;
+        
+        console.log(`[フィルタリング統計] 除外されたレコード: ${filteredOut}件`);
+        console.log(`  - permissionGroupなし/不正: ${noPermissionGroup}件`);
+        console.log(`  - permissionGroupありだが条件不一致: ${hasPermissionGroupButNoMatch}件`);
+      }
     }
 
     // バッチサイズに合わせて切り詰め
@@ -751,15 +770,32 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
   const endTime = Date.now();
   const duration = ((endTime - startTime) / 1000).toFixed(2);
   
+  // フィルタリング条件に一致するレコードの総数を集計
+  const totalFilteredRecords = allResults.batches.reduce((sum, batch) => {
+    // 各バッチのprocessedはフィルタリング後の件数
+    return sum + (batch.processed || 0);
+  }, 0);
+  
   console.log(`=== 全件処理完了 ===`);
   console.log(`処理時間: ${duration}秒`);
   console.log(`バッチ数: ${batchCount}`);
+  console.log(`フィルタリング条件に一致したレコード総数: ${totalFilteredRecords}件`);
   console.log(`作成: ${allResults.totalCreated}件`);
   if (allResults.totalUpdated > 0) {
     console.log(`更新: ${allResults.totalUpdated}件`);
   }
   console.log(`スキップ: ${allResults.totalSkipped}件`);
   console.log(`失敗: ${allResults.totalFailed}件`);
+  
+  // 警告: 条件に一致するレコードが想定より少ない場合
+  // 注意: 1252名が条件に一致するはずなので、それより少ない場合は全レコードを取得できていない可能性がある
+  if (totalFilteredRecords < 1000) {
+    console.warn(`⚠️ 警告: フィルタリング条件に一致するレコードが${totalFilteredRecords}件しかありません。`);
+    console.warn(`   想定される対象者数: 1252名`);
+    console.warn(`   差: ${1252 - totalFilteredRecords}件`);
+    console.warn(`   全レコードを取得できていない可能性があります。`);
+    console.warn(`   フィルタリング条件: '試験対策集中講座（養成）' または '合格パック単体（養成）'`);
+  }
   
     const messageParts = [];
     if (allResults.totalCreated > 0) messageParts.push(`作成 ${allResults.totalCreated}件`);
