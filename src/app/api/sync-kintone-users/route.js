@@ -26,7 +26,7 @@
  */
 
 import { getKintoneRecords, getAllKintoneRecords, extractEmailFromRecord, extractRecordIdFromRecord, isValidEmail } from '@/lib/kintoneClient';
-import { createUserWithTempPassword, createUsersBatch, userExists, deleteUsersBatch, getUserByKintoneRecordId, updateUserEmail } from '@/lib/supabaseAdmin';
+import { createUserWithTempPassword, createUsersBatch, userExists, deleteUsersBatch, getUserByKintoneRecordId, updateUserEmail, getUserByEmailWithPagination, updateUserMetadata } from '@/lib/supabaseAdmin';
 
 export async function POST(request) {
   const startTime = Date.now();
@@ -446,6 +446,33 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
           const exists = await userExists(email);
           if (exists) {
             console.log(`[既存ユーザー発見] email=${email} (メールアドレスで検出、レコードIDなし)`);
+            
+            // 既存ユーザーにkintoneレコードIDを追加
+            if (recordId) {
+              try {
+                // メールアドレスでユーザーを取得（ページネーション対応）
+                const existingUserByEmail = await getUserByEmailWithPagination(email);
+                
+                if (existingUserByEmail) {
+                  // kintoneレコードIDが既に設定されているかチェック
+                  const currentRecordId = existingUserByEmail.user_metadata?.kintone_record_id;
+                  if (!currentRecordId) {
+                    console.log(`[メタデータ更新] 既存ユーザーにkintoneレコードIDを追加: email=${email}, recordId=${recordId}`);
+                    await updateUserMetadata(existingUserByEmail.id, recordId);
+                    updatedCount++;
+                    console.log(`✅ kintoneレコードID追加成功: email=${email}, recordId=${recordId}`);
+                  } else {
+                    console.log(`[メタデータ更新スキップ] 既にkintoneレコードIDが設定されています: email=${email}, 既存ID=${currentRecordId}, 新規ID=${recordId}`);
+                  }
+                } else {
+                  console.warn(`[警告] メールアドレスで既存ユーザーが見つかりましたが、詳細取得に失敗: email=${email}`);
+                }
+              } catch (updateError) {
+                console.error(`❌ kintoneレコードID追加エラー (${email}):`, updateError);
+                // エラーが発生しても処理は続行
+              }
+            }
+            
             existingEmails.push(email);
           } else {
             // 新規ユーザーとして作成

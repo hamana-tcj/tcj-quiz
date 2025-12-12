@@ -340,7 +340,7 @@ export async function getUserByEmail(email) {
 }
 
 /**
- * kintoneレコードIDでユーザーを検索
+ * kintoneレコードIDでユーザーを検索（ページネーション対応）
  * @param {string} kintoneRecordId - kintoneレコードID
  * @returns {Promise<Object|null>} ユーザー情報（存在しない場合はnull）
  */
@@ -354,16 +354,48 @@ export async function getUserByKintoneRecordId(kintoneRecordId) {
   }
 
   try {
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers();
+    const targetRecordId = String(kintoneRecordId);
     
-    if (error) {
-      throw error;
-    }
+    // ページネーションで全ユーザーを検索
+    let page = 1;
+    const perPage = 1000;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+        page: page,
+        perPage: perPage,
+      });
+      
+      if (error) {
+        throw error;
+      }
 
-    const user = data.users.find(user => 
-      user.user_metadata?.kintone_record_id === String(kintoneRecordId)
-    );
-    return user || null;
+      if (!data || !data.users || data.users.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      // 現在のページでユーザーを検索
+      const user = data.users.find(user => 
+        user.user_metadata?.kintone_record_id === targetRecordId
+      );
+      
+      if (user) {
+        return user;
+      }
+
+      // 次のページがあるかチェック
+      hasMore = data.users.length === perPage;
+      page++;
+      
+      // 安全のため、最大10ページ（10,000件）までチェック
+      if (page > 10) {
+        break;
+      }
+    }
+    
+    return null;
   } catch (error) {
     console.error('ユーザー検索エラー（kintoneレコードID）:', error);
     throw error;
@@ -395,6 +427,116 @@ export async function updateUserEmail(userId, newEmail) {
     return data.user;
   } catch (error) {
     console.error('メールアドレス更新エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * ユーザーのメタデータを更新（kintoneレコードIDを追加）
+ * @param {string} userId - ユーザーID
+ * @param {string} kintoneRecordId - kintoneレコードID
+ * @returns {Promise<Object>} 更新されたユーザー情報
+ */
+export async function updateUserMetadata(userId, kintoneRecordId) {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase Adminクライアントが初期化されていません');
+  }
+
+  try {
+    // 現在のユーザー情報を取得
+    const { data: currentUser, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    
+    if (getUserError) {
+      throw getUserError;
+    }
+
+    // 既存のメタデータを取得
+    const currentMetadata = currentUser.user.user_metadata || {};
+    
+    // kintoneレコードIDが既に設定されている場合はスキップ
+    if (currentMetadata.kintone_record_id) {
+      console.log(`ユーザー ${userId} には既にkintoneレコードIDが設定されています: ${currentMetadata.kintone_record_id}`);
+      return currentUser.user;
+    }
+
+    // メタデータを更新（既存のメタデータを保持しつつ、kintoneレコードIDを追加）
+    const updatedMetadata = {
+      ...currentMetadata,
+      kintone_record_id: String(kintoneRecordId),
+    };
+
+    const { data, error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      user_metadata: updatedMetadata,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    console.log(`ユーザー ${userId} のメタデータにkintoneレコードIDを追加しました: ${kintoneRecordId}`);
+    return data.user;
+  } catch (error) {
+    console.error('メタデータ更新エラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * メールアドレスでユーザーを検索して取得（ページネーション対応）
+ * @param {string} email - メールアドレス
+ * @returns {Promise<Object|null>} ユーザー情報（存在しない場合はnull）
+ */
+export async function getUserByEmailWithPagination(email) {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase Adminクライアントが初期化されていません');
+  }
+
+  try {
+    const normalizedEmail = email?.toLowerCase().trim();
+    
+    // ページネーションで全ユーザーを検索
+    let page = 1;
+    const perPage = 1000;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+        page: page,
+        perPage: perPage,
+      });
+      
+      if (error) {
+        throw error;
+      }
+
+      if (!data || !data.users || data.users.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      // 現在のページでユーザーを検索
+      const user = data.users.find(user => {
+        const userEmail = user.email?.toLowerCase().trim();
+        return userEmail === normalizedEmail;
+      });
+      
+      if (user) {
+        return user;
+      }
+
+      // 次のページがあるかチェック
+      hasMore = data.users.length === perPage;
+      page++;
+      
+      // 安全のため、最大10ページ（10,000件）までチェック
+      if (page > 10) {
+        break;
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('ユーザー検索エラー（メールアドレス）:', error);
     throw error;
   }
 }
