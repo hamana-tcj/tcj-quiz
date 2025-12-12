@@ -624,8 +624,11 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
   let hasMore = true;
 
   // タイムアウト対策: 処理時間を監視（Vercelの制限: 10秒/60秒）
-  const MAX_EXECUTION_TIME = 45000; // 45秒（安全マージン）
+  // Vercel Hobbyプラン: 10秒、Proプラン: 60秒
+  // 安全マージンを考慮して50秒に設定（Hobbyプランでは10秒でタイムアウトする可能性がある）
+  const MAX_EXECUTION_TIME = 50000; // 50秒（安全マージン）
   const startTimeForTimeout = Date.now();
+  console.log(`タイムアウト設定: ${MAX_EXECUTION_TIME}ms (${MAX_EXECUTION_TIME / 1000}秒)`);
 
   while (hasMore && batchCount < maxBatches) {
     // タイムアウトチェック
@@ -641,12 +644,15 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
     console.log(`バッチ ${batchCount}/${maxBatches} を処理中... (経過時間: ${(elapsed / 1000).toFixed(2)}秒)`);
     
     try {
+      const batchStartTime = Date.now();
       const batchResult = await syncBatch({
         batchSize,
         offset: currentOffset,
         emailFieldCode,
         query,
       });
+      const batchElapsed = Date.now() - batchStartTime;
+      console.log(`バッチ ${batchCount} の処理時間: ${(batchElapsed / 1000).toFixed(2)}秒`);
 
       const result = await batchResult.json();
 
