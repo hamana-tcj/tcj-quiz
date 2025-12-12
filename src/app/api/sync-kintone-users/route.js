@@ -349,7 +349,13 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
           email: extractEmailFromRecord(firstRecord, emailFieldCode),
           permissionGroup: permissionGroup ? '存在' : 'なし',
           groupNames: groupNames,
+          groupNamesCount: groupNames.length, // 複数値の数を表示
         });
+        
+        // 複数値がある場合の詳細を表示（最初の3件のみ）
+        if (groupNames.length > 1) {
+          console.log(`[複数値検出] レコードに${groupNames.length}個のgroupNameが含まれています:`, groupNames);
+        }
       } else if (beforeFilterCount > 0) {
         // フィルタリングで0件になった場合、レコードの構造を確認
         console.log('警告: フィルタリング後に0件になりました。レコード構造を確認:');
@@ -361,6 +367,19 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
           hasValue: !!permissionGroup?.value,
           isArray: Array.isArray(permissionGroup?.value),
           groupNames: groupNames,
+          groupNamesCount: groupNames.length,
+          // テーブル型フィールドの構造を詳しく確認
+          rawStructure: permissionGroup ? {
+            hasValue: !!permissionGroup.value,
+            valueType: typeof permissionGroup.value,
+            isArray: Array.isArray(permissionGroup.value),
+            arrayLength: Array.isArray(permissionGroup.value) ? permissionGroup.value.length : 0,
+            firstRow: Array.isArray(permissionGroup.value) && permissionGroup.value.length > 0 ? {
+              hasValue: !!permissionGroup.value[0].value,
+              hasGroupName: !!permissionGroup.value[0].value?.groupName,
+              groupNameValue: permissionGroup.value[0].value?.groupName?.value,
+            } : null,
+          } : null,
         });
       }
       

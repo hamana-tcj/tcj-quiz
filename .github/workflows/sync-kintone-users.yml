@@ -18,7 +18,7 @@ on:
       maxBatches:
         description: '最大バッチ数（全件処理時）'
         required: false
-        default: '20'
+        default: '30'
         type: string
       batchSize:
         description: '1バッチあたりの処理件数'
@@ -44,7 +44,7 @@ jobs:
         env:
           API_URL: ${{ secrets.API_URL || 'https://your-domain.com' }}
           PROCESS_ALL: ${{ inputs.processAll || 'true' }}
-          MAX_BATCHES: ${{ inputs.maxBatches || '20' }}
+          MAX_BATCHES: ${{ inputs.maxBatches || '30' }}
           BATCH_SIZE: ${{ inputs.batchSize || '50' }}
           DELETE_ORPHANED: ${{ inputs.deleteOrphanedUsers || 'false' }}
         run: |
