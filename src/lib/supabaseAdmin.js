@@ -355,11 +355,14 @@ export async function getUserByKintoneRecordId(kintoneRecordId) {
 
   try {
     const targetRecordId = String(kintoneRecordId);
+    console.log(`[getUserByKintoneRecordId] 検索開始: recordId=${targetRecordId} (型: ${typeof targetRecordId})`);
     
     // ページネーションで全ユーザーを検索
     let page = 1;
     const perPage = 1000;
     let hasMore = true;
+    let totalChecked = 0;
+    let usersWithKintoneId = 0;
     
     while (hasMore) {
       const { data, error } = await supabaseAdmin.auth.admin.listUsers({
@@ -376,12 +379,27 @@ export async function getUserByKintoneRecordId(kintoneRecordId) {
         break;
       }
 
+      totalChecked += data.users.length;
+      
+      // デバッグ: kintone_record_idを持つユーザーをカウント
+      const usersWithRecordId = data.users.filter(user => user.user_metadata?.kintone_record_id);
+      usersWithKintoneId += usersWithRecordId.length;
+      
       // 現在のページでユーザーを検索
-      const user = data.users.find(user => 
-        user.user_metadata?.kintone_record_id === targetRecordId
-      );
+      const user = data.users.find(user => {
+        const userRecordId = user.user_metadata?.kintone_record_id;
+        const matches = userRecordId === targetRecordId;
+        
+        // デバッグ: 最初の数件のレコードIDをログ出力（最初のページのみ）
+        if (page === 1 && data.users.indexOf(user) < 5) {
+          console.log(`[getUserByKintoneRecordId] サンプル: userRecordId=${userRecordId} (型: ${typeof userRecordId}), targetRecordId=${targetRecordId} (型: ${typeof targetRecordId}), matches=${matches}`);
+        }
+        
+        return matches;
+      });
       
       if (user) {
+        console.log(`[getUserByKintoneRecordId] ユーザー発見: recordId=${targetRecordId}, email=${user.email}, userId=${user.id}, チェック件数=${totalChecked}件`);
         return user;
       }
 
@@ -391,10 +409,12 @@ export async function getUserByKintoneRecordId(kintoneRecordId) {
       
       // 安全のため、最大10ページ（10,000件）までチェック
       if (page > 10) {
+        console.warn(`[getUserByKintoneRecordId] 10,000件を超えるユーザーをチェックしました。recordId=${targetRecordId}, チェック件数=${totalChecked}件`);
         break;
       }
     }
     
+    console.log(`[getUserByKintoneRecordId] ユーザー未発見: recordId=${targetRecordId}, チェック件数=${totalChecked}件, kintone_record_idを持つユーザー=${usersWithKintoneId}件`);
     return null;
   } catch (error) {
     console.error('ユーザー検索エラー（kintoneレコードID）:', error);
