@@ -407,18 +407,65 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
     }
 
     // 既存ユーザーをチェック・更新
+    // 最適化: バッチ処理の開始時に一度だけ全ユーザーを取得して、メモリ上で検索
+    console.log(`[ユーザーチェック開始] ${recordData.length}件のレコードをチェックします`);
+    console.log(`[最適化] 全ユーザーを一度に取得してメモリ上で検索します...`);
+    
+    const allSupabaseUsers = [];
+    let page = 1;
+    const perPage = 1000;
+    let hasMore = true;
+    const supabaseAdmin = (await import('@/lib/supabaseAdmin')).supabaseAdmin;
+    
+    while (hasMore && page <= 10) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+        page: page,
+        perPage: perPage,
+      });
+      
+      if (error) {
+        console.error(`[最適化] ユーザー取得エラー (ページ${page}):`, error);
+        break;
+      }
+      
+      if (!data || !data.users || data.users.length === 0) {
+        hasMore = false;
+        break;
+      }
+      
+      allSupabaseUsers.push(...data.users);
+      hasMore = data.users.length === perPage;
+      page++;
+    }
+    
+    console.log(`[最適化] 全ユーザー取得完了: ${allSupabaseUsers.length}件`);
+    
+    // メモリ上で検索用のマップを作成
+    const usersByKintoneRecordId = new Map();
+    const usersByEmail = new Map();
+    
+    for (const user of allSupabaseUsers) {
+      const kintoneRecordId = user.user_metadata?.kintone_record_id;
+      if (kintoneRecordId) {
+        usersByKintoneRecordId.set(String(kintoneRecordId), user);
+      }
+      if (user.email) {
+        usersByEmail.set(user.email.toLowerCase().trim(), user);
+      }
+    }
+    
+    console.log(`[最適化] 検索マップ作成完了: kintoneRecordId=${usersByKintoneRecordId.size}件, email=${usersByEmail.size}件`);
+
     const recordsToCreate = [];
     const existingEmails = [];
     let updatedCount = 0;
 
-    console.log(`[ユーザーチェック開始] ${recordData.length}件のレコードをチェックします`);
-
     for (const { email, recordId } of recordData) {
       try {
-        // まずkintoneレコードIDで既存ユーザーを検索
+        // まずkintoneレコードIDで既存ユーザーを検索（メモリ上で検索）
         let existingUser = null;
         if (recordId) {
-          existingUser = await getUserByKintoneRecordId(recordId);
+          existingUser = usersByKintoneRecordId.get(String(recordId));
           if (existingUser) {
             console.log(`[既存ユーザー発見] kintoneレコードID=${recordId}, email=${email}, Supabase ID=${existingUser.id}`);
           } else {
@@ -453,30 +500,25 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
             existingEmails.push(email);
           }
         } else {
-          // kintoneレコードIDで見つからない場合、メールアドレスで検索
-          const exists = await userExists(email);
-          if (exists) {
+          // kintoneレコードIDで見つからない場合、メールアドレスで検索（メモリ上で検索）
+          const normalizedEmail = email.toLowerCase().trim();
+          const existingUserByEmail = usersByEmail.get(normalizedEmail);
+          
+          if (existingUserByEmail) {
             console.log(`[既存ユーザー発見] email=${email} (メールアドレスで検出、レコードIDなし)`);
             
             // 既存ユーザーにkintoneレコードIDを追加
             if (recordId) {
               try {
-                // メールアドレスでユーザーを取得（ページネーション対応）
-                const existingUserByEmail = await getUserByEmailWithPagination(email);
-                
-                if (existingUserByEmail) {
-                  // kintoneレコードIDが既に設定されているかチェック
-                  const currentRecordId = existingUserByEmail.user_metadata?.kintone_record_id;
-                  if (!currentRecordId) {
-                    console.log(`[メタデータ更新] 既存ユーザーにkintoneレコードIDを追加: email=${email}, recordId=${recordId}`);
-                    await updateUserMetadata(existingUserByEmail.id, recordId);
-                    updatedCount++;
-                    console.log(`✅ kintoneレコードID追加成功: email=${email}, recordId=${recordId}`);
-                  } else {
-                    console.log(`[メタデータ更新スキップ] 既にkintoneレコードIDが設定されています: email=${email}, 既存ID=${currentRecordId}, 新規ID=${recordId}`);
-                  }
+                // kintoneレコードIDが既に設定されているかチェック
+                const currentRecordId = existingUserByEmail.user_metadata?.kintone_record_id;
+                if (!currentRecordId) {
+                  console.log(`[メタデータ更新] 既存ユーザーにkintoneレコードIDを追加: email=${email}, recordId=${recordId}`);
+                  await updateUserMetadata(existingUserByEmail.id, recordId);
+                  updatedCount++;
+                  console.log(`✅ kintoneレコードID追加成功: email=${email}, recordId=${recordId}`);
                 } else {
-                  console.warn(`[警告] メールアドレスで既存ユーザーが見つかりましたが、詳細取得に失敗: email=${email}`);
+                  console.log(`[メタデータ更新スキップ] 既にkintoneレコードIDが設定されています: email=${email}, 既存ID=${currentRecordId}, 新規ID=${recordId}`);
                 }
               } catch (updateError) {
                 console.error(`❌ kintoneレコードID追加エラー (${email}):`, updateError);
