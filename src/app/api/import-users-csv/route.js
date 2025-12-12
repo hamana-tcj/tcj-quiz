@@ -29,7 +29,7 @@
  * }
  */
 
-import { createUsersBatch, userExists } from '@/lib/supabaseAdmin';
+import { createUsersBatch, userExists, getUserByKintoneRecordId, updateUserEmail, updateUserMetadata } from '@/lib/supabaseAdmin';
 import { isValidEmail } from '@/lib/kintoneClient';
 
 export async function POST(request) {
@@ -85,6 +85,54 @@ export async function POST(request) {
     const existingEmails = [];
     const invalidEmails = [];
     let processedCount = 0;
+    let updatedCount = 0;
+
+    // 最適化: 全ユーザーを一度に取得してメモリ上で検索
+    console.log('[最適化] 全ユーザーを一度に取得してメモリ上で検索します...');
+    const allSupabaseUsers = [];
+    let page = 1;
+    const perPage = 1000;
+    let hasMore = true;
+    const { supabaseAdmin } = await import('@/lib/supabaseAdmin');
+    
+    while (hasMore && page <= 10) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+        page: page,
+        perPage: perPage,
+      });
+      
+      if (error) {
+        console.error(`[最適化] ユーザー取得エラー (ページ${page}):`, error);
+        break;
+      }
+      
+      if (!data || !data.users || data.users.length === 0) {
+        hasMore = false;
+        break;
+      }
+      
+      allSupabaseUsers.push(...data.users);
+      hasMore = data.users.length === perPage;
+      page++;
+    }
+    
+    console.log(`[最適化] 全ユーザー取得完了: ${allSupabaseUsers.length}件`);
+    
+    // メモリ上で検索用のマップを作成
+    const usersByKintoneRecordId = new Map();
+    const usersByEmail = new Map();
+    
+    for (const user of allSupabaseUsers) {
+      const kintoneRecordId = user.user_metadata?.kintone_record_id;
+      if (kintoneRecordId) {
+        usersByKintoneRecordId.set(String(kintoneRecordId), user);
+      }
+      if (user.email) {
+        usersByEmail.set(user.email.toLowerCase().trim(), user);
+      }
+    }
+    
+    console.log(`[最適化] 検索マップ作成完了: kintoneRecordId=${usersByKintoneRecordId.size}件, email=${usersByEmail.size}件`);
 
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -110,20 +158,72 @@ export async function POST(request) {
 
       // 既存ユーザーチェック
       try {
-        const exists = await userExists(email);
-        if (exists) {
-          existingEmails.push({ email, kintoneRecordId, line: i + 1 });
+        // まずkintoneレコードIDで既存ユーザーを検索（メモリ上で検索）
+        let existingUser = null;
+        if (kintoneRecordId) {
+          existingUser = usersByKintoneRecordId.get(String(kintoneRecordId));
+          if (existingUser) {
+            console.log(`[既存ユーザー発見] kintoneレコードID=${kintoneRecordId}, email=${email}, Supabase ID=${existingUser.id}`);
+            
+            // メールアドレスを正規化して比較
+            const existingEmailNormalized = existingUser.email?.toLowerCase().trim();
+            if (existingEmailNormalized !== email) {
+              // メールアドレスが変更されている場合は更新
+              try {
+                console.log(`[メールアドレス更新] ${existingUser.email} → ${email} (レコードID: ${kintoneRecordId})`);
+                await updateUserEmail(existingUser.id, email);
+                updatedCount++;
+                console.log(`✅ メールアドレス更新成功: ${existingUser.email} → ${email}`);
+                existingEmails.push({ email, kintoneRecordId, line: i + 1, action: 'updated' });
+              } catch (updateError) {
+                console.error(`❌ メールアドレス更新エラー (${email}):`, updateError);
+                existingEmails.push({ email, kintoneRecordId, line: i + 1, reason: '更新エラー', error: updateError.message });
+              }
+            } else {
+              // メールアドレスが同じ場合はスキップ
+              console.log(`[スキップ] メールアドレスが同じためスキップ: ${email}`);
+              existingEmails.push({ email, kintoneRecordId, line: i + 1, action: 'skipped' });
+            }
+            continue;
+          }
+        }
+
+        // kintoneレコードIDで見つからない場合、メールアドレスで検索（メモリ上で検索）
+        const existingUserByEmail = usersByEmail.get(email);
+        if (existingUserByEmail) {
+          console.log(`[既存ユーザー発見] email=${email} (メールアドレスで検出)`);
+          
+          // 既存ユーザーにkintoneレコードIDを追加（もしCSVに含まれている場合）
+          if (kintoneRecordId) {
+            try {
+              const currentRecordId = existingUserByEmail.user_metadata?.kintone_record_id;
+              if (!currentRecordId) {
+                console.log(`[メタデータ更新] 既存ユーザーにkintoneレコードIDを追加: email=${email}, recordId=${kintoneRecordId}`);
+                await updateUserMetadata(existingUserByEmail.id, kintoneRecordId);
+                updatedCount++;
+                console.log(`✅ kintoneレコードID追加成功: email=${email}, recordId=${kintoneRecordId}`);
+              } else if (currentRecordId !== String(kintoneRecordId)) {
+                console.log(`[警告] kintoneレコードIDが異なります: email=${email}, 既存ID=${currentRecordId}, CSV ID=${kintoneRecordId}`);
+              }
+            } catch (updateError) {
+              console.error(`❌ kintoneレコードID追加エラー (${email}):`, updateError);
+            }
+          }
+          
+          existingEmails.push({ email, kintoneRecordId, line: i + 1, action: 'skipped' });
           continue;
         }
 
+        // 新規ユーザーとして作成
+        console.log(`[新規ユーザー作成予定] email=${email}, recordId=${kintoneRecordId || 'なし'}`);
         recordsToCreate.push({ email, kintoneRecordId });
       } catch (error) {
         console.error(`ユーザー存在チェックエラー (${email}):`, error);
-        existingEmails.push({ email, kintoneRecordId, line: i + 1, reason: 'チェックエラー' });
+        existingEmails.push({ email, kintoneRecordId, line: i + 1, reason: 'チェックエラー', error: error.message });
       }
     }
 
-    console.log(`CSV解析完了: 処理対象=${processedCount}件, 新規作成予定=${recordsToCreate.length}件, 既存=${existingEmails.length}件, 無効=${invalidEmails.length}件`);
+    console.log(`CSV解析完了: 処理対象=${processedCount}件, 新規作成予定=${recordsToCreate.length}件, 既存=${existingEmails.length}件, 更新=${updatedCount}件, 無効=${invalidEmails.length}件`);
 
     // 新規ユーザーを作成
     let createResults = { success: [], skipped: [], failed: [] };
@@ -156,6 +256,7 @@ export async function POST(request) {
       success: true,
       total: processedCount,
       created: createResults.success.length,
+      updated: updatedCount,
       skipped: existingEmails.length + createResults.skipped.length + skippedFromFailed.length,
       failed: actualFailed.length + invalidEmails.length,
       errors: [
@@ -165,6 +266,7 @@ export async function POST(request) {
       details: {
         processed: processedCount,
         created: createResults.success.length,
+        updated: updatedCount,
         skipped: existingEmails.length + createResults.skipped.length + skippedFromFailed.length,
         failed: actualFailed.length + invalidEmails.length,
         existingEmails: existingEmails.slice(0, 10), // 最初の10件のみ表示
@@ -174,7 +276,7 @@ export async function POST(request) {
     };
 
     console.log(`=== CSV一括登録処理完了（処理時間: ${duration}秒） ===`);
-    console.log(`結果: 作成=${result.created}件, スキップ=${result.skipped}件, 失敗=${result.failed}件`);
+    console.log(`結果: 作成=${result.created}件, 更新=${result.updated}件, スキップ=${result.skipped}件, 失敗=${result.failed}件`);
 
     return Response.json(result);
   } catch (error) {
