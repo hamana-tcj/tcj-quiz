@@ -6,6 +6,33 @@ on:
     # 日本時間では毎時9分（UTC+9）
     - cron: '0 * * * *'
   workflow_dispatch: # 手動実行も可能
+    inputs:
+      processAll:
+        description: '全件処理するか（true/false）'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      maxBatches:
+        description: '最大バッチ数（全件処理時）'
+        required: false
+        default: '20'
+        type: string
+      batchSize:
+        description: '1バッチあたりの処理件数'
+        required: false
+        default: '50'
+        type: string
+      deleteOrphanedUsers:
+        description: '孤立ユーザーを削除するか（true/false）'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
   sync:
@@ -16,6 +43,10 @@ jobs:
       - name: Sync users from kintone to Supabase
         env:
           API_URL: ${{ secrets.API_URL || 'https://your-domain.com' }}
+          PROCESS_ALL: ${{ inputs.processAll || 'true' }}
+          MAX_BATCHES: ${{ inputs.maxBatches || '20' }}
+          BATCH_SIZE: ${{ inputs.batchSize || '50' }}
+          DELETE_ORPHANED: ${{ inputs.deleteOrphanedUsers || 'false' }}
         run: |
           echo "=========================================="
           echo "kintone → Supabase ユーザー同期処理"
@@ -46,20 +77,22 @@ jobs:
           
           # curlでリダイレクトを追跡（-Lオプションでリダイレクトに従う）
           # -wオプションで最終的なHTTPステータスコードを取得
-          # タイムアウト対策: maxBatchesを10に減らし、batchSizeを50に減らす
+          # タイムアウト対策: batchSizeを50に減らす
+          # 対象者が697名のため、maxBatchesを20に設定（50 × 20 = 1000件まで処理可能）
           # 削除処理は別リクエストで実行（タイムアウト回避）
           echo "1. ユーザー同期処理を実行..."
+          echo "   パラメータ: processAll=$PROCESS_ALL, maxBatches=$MAX_BATCHES, batchSize=$BATCH_SIZE, deleteOrphanedUsers=$DELETE_ORPHANED"
           sync_response=$(curl -s -L -w "\n%{http_code}\n%{url_effective}" -X POST "$API_URL/api/sync-kintone-users" \
             -H "Content-Type: application/json" \
-            -d '{
-              "batchSize": 50,
-              "offset": 0,
-              "emailFieldCode": "email",
-              "query": "",
-              "processAll": true,
-              "maxBatches": 10,
-              "deleteOrphanedUsers": false
-            }')
+            -d "{
+              \"batchSize\": $BATCH_SIZE,
+              \"offset\": 0,
+              \"emailFieldCode\": \"email\",
+              \"query\": \"\",
+              \"processAll\": $PROCESS_ALL,
+              \"maxBatches\": $MAX_BATCHES,
+              \"deleteOrphanedUsers\": $DELETE_ORPHANED
+            }")
           
           # レスポンスとHTTPステータスコードを分離
           sync_http_code=$(echo "$sync_response" | tail -n2 | head -n1)
@@ -77,19 +110,19 @@ jobs:
           fi
           echo ""
           
-          # 同期処理が成功した場合のみ、削除処理を実行
-          if [ -n "$sync_http_code" ] && [ "$sync_http_code" -eq 200 ]; then
+          # 同期処理が成功した場合のみ、削除処理を実行（deleteOrphanedUsersがfalseの場合のみ）
+          if [ -n "$sync_http_code" ] && [ "$sync_http_code" -eq 200 ] && [ "$DELETE_ORPHANED" != "true" ]; then
             echo "2. 削除処理を実行中..."
             delete_response=$(curl -s -L -w "\n%{http_code}\n%{url_effective}" -X POST "$API_URL/api/sync-kintone-users" \
               -H "Content-Type: application/json" \
-              -d '{
-                "batchSize": 50,
-                "offset": 0,
-                "emailFieldCode": "email",
-                "query": "",
-                "processAll": false,
-                "deleteOrphanedUsers": true
-              }')
+              -d "{
+                \"batchSize\": $BATCH_SIZE,
+                \"offset\": 0,
+                \"emailFieldCode\": \"email\",
+                \"query\": \"\",
+                \"processAll\": false,
+                \"deleteOrphanedUsers\": true
+              }")
             
             delete_http_code=$(echo "$delete_response" | tail -n2 | head -n1)
             delete_final_url=$(echo "$delete_response" | tail -n1)

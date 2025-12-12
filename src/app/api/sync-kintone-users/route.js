@@ -343,14 +343,25 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
       // デバッグ: 最初のレコードの構造を確認（条件に一致する場合）
       if (records.length > 0) {
         const firstRecord = records[0];
+        const permissionGroup = firstRecord.permissionGroup;
+        const groupNames = permissionGroup?.value?.map(row => row.value?.groupName?.value).filter(Boolean) || [];
         console.log('条件に一致したレコード例:', {
           email: extractEmailFromRecord(firstRecord, emailFieldCode),
-          permissionGroup: firstRecord.permissionGroup ? '存在' : 'なし',
+          permissionGroup: permissionGroup ? '存在' : 'なし',
+          groupNames: groupNames,
         });
       } else if (beforeFilterCount > 0) {
         // フィルタリングで0件になった場合、レコードの構造を確認
         console.log('警告: フィルタリング後に0件になりました。レコード構造を確認:');
-        console.log('サンプルレコード:', JSON.stringify(allRecords[0], null, 2));
+        const sampleRecord = allRecords[0];
+        const permissionGroup = sampleRecord?.permissionGroup;
+        const groupNames = permissionGroup?.value?.map(row => row.value?.groupName?.value).filter(Boolean) || [];
+        console.log('サンプルレコードのpermissionGroup:', {
+          exists: !!permissionGroup,
+          hasValue: !!permissionGroup?.value,
+          isArray: Array.isArray(permissionGroup?.value),
+          groupNames: groupNames,
+        });
       }
     }
 
