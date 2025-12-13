@@ -759,6 +759,9 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
       console.log(`タイムアウト対策: ${elapsed}ms経過したため処理を中断します`);
       allResults.stoppedEarly = true;
       allResults.stoppedReason = 'timeout';
+      // タイムアウトで中断された場合でも、次回の実行で続きから処理できるように、現在のoffsetを出力
+      console.log(`NEXTOFFSET_FOR_NEXT_RUN=${currentOffset}`);
+      console.log(`STOPPED_EARLY_FOR_NEXT_RUN=true`);
       break;
     }
 
@@ -876,6 +879,9 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
           previousHasMoreKintoneRecords = false;
         }
         console.log(`バッチ ${batchCount} 完了: offset ${previousOffset} → ${currentOffset}, 残りフィルタ済み=${remainingFilteredRecords.length}件, hasMore=${hasMore}, kintone残り=${previousHasMoreKintoneRecords || result.hasMore === true ? 'あり' : 'なし'}`);
+        // タイムアウトで中断された場合でも、次回の実行で続きから処理できるように、各バッチの処理後にnextOffsetを出力
+        console.log(`NEXTOFFSET_FOR_NEXT_RUN=${currentOffset}`);
+        console.log(`STOPPED_EARLY_FOR_NEXT_RUN=${allResults.stoppedEarly || (batchCount >= maxBatches && hasMore) ? 'true' : 'false'}`);
         
         // offsetが10,000を超える場合は警告
         if (typeof currentOffset === 'number' && currentOffset > 10000) {
@@ -883,6 +889,9 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
         }
       } else {
         console.log(`バッチ ${batchCount} 完了: 次のバッチはありません (offset: ${currentOffset})`);
+        // タイムアウトで中断された場合でも、次回の実行で続きから処理できるように、各バッチの処理後にnextOffsetを出力
+        console.log(`NEXTOFFSET_FOR_NEXT_RUN=${currentOffset}`);
+        console.log(`STOPPED_EARLY_FOR_NEXT_RUN=${allResults.stoppedEarly || (batchCount >= maxBatches && hasMore) ? 'true' : 'false'}`);
       }
 
       // エラーが発生した場合は中断

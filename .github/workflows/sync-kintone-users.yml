@@ -48,14 +48,25 @@ jobs:
         run: |
           echo "前回の実行結果からnextOffsetを決定中..."
           # GitHub Actions APIを使用して前回の実行結果を取得
-          # 最新の成功した実行（または完了した実行）のログからnextOffsetを抽出
-          PREVIOUS_RUN=$(gh run list --workflow="${{ github.workflow }}" --branch="${{ github.ref_name }}" --limit=2 --json databaseId,conclusion,status --jq '.[1] | select(.conclusion == "success" or .conclusion == "failure" or .status == "completed") | .databaseId' 2>/dev/null || echo "")
+          # 最新の実行（現在の実行を除く）を取得
+          echo "実行中のワークフロー: ${{ github.workflow }}"
+          echo "実行中のブランチ: ${{ github.ref_name }}"
           
-          if [ -n "$PREVIOUS_RUN" ] && [ "$PREVIOUS_RUN" != "null" ]; then
-            echo "前回の実行ID: $PREVIOUS_RUN"
+          # 実行リストを取得（デバッグ用）
+          ALL_RUNS=$(gh run list --workflow="${{ github.workflow }}" --branch="${{ github.ref_name }}" --limit=5 --json databaseId,conclusion,status,createdAt 2>/dev/null || echo "[]")
+          echo "実行リスト（最新5件）:"
+          echo "$ALL_RUNS" | jq '.' || echo "$ALL_RUNS"
+          
+          # 最新の実行（現在の実行を除く）を取得
+          # 最初の実行（.[0]）は現在の実行なので、2番目（.[1]）を取得
+          PREVIOUS_RUN=$(echo "$ALL_RUNS" | jq -r '.[1] | select(.conclusion == "success" or .conclusion == "failure" or .status == "completed") | .databaseId' 2>/dev/null || echo "")
+          
+          if [ -n "$PREVIOUS_RUN" ] && [ "$PREVIOUS_RUN" != "null" ] && [ "$PREVIOUS_RUN" != "" ]; then
+            echo "✅ 前回の実行ID: $PREVIOUS_RUN"
             # 前回の実行のログから「NEXTOFFSET_FOR_NEXT_RUN=」の行を抽出（確実に取得できる形式）
             PREVIOUS_LOG=$(gh run view $PREVIOUS_RUN --log 2>/dev/null || echo "")
             if [ -n "$PREVIOUS_LOG" ]; then
+              echo "前回の実行ログを取得しました（行数: $(echo "$PREVIOUS_LOG" | wc -l)）"
               # 「NEXTOFFSET_FOR_NEXT_RUN=」の行から値を抽出
               PREVIOUS_NEXT_OFFSET=$(echo "$PREVIOUS_LOG" | grep "NEXTOFFSET_FOR_NEXT_RUN=" | tail -1 | sed 's/.*NEXTOFFSET_FOR_NEXT_RUN=\([0-9]*\).*/\1/' || echo "0")
               # 「STOPPED_EARLY_FOR_NEXT_RUN=」の行から値を抽出
@@ -79,6 +90,10 @@ jobs:
             echo "⚠️ 前回の実行が見つかりませんでした（初回実行の可能性があります）。offset=0から開始します"
             echo "nextOffset=0" >> $GITHUB_OUTPUT
           fi
+          
+          # デバッグ: 決定されたnextOffsetを表示
+          DETERMINED_OFFSET="${{ steps.determine_offset.outputs.nextOffset || '0' }}"
+          echo "決定されたnextOffset: $DETERMINED_OFFSET"
       
       - name: Sync users from kintone to Supabase
         env:
@@ -124,6 +139,7 @@ jobs:
           INITIAL_OFFSET="${{ steps.determine_offset.outputs.nextOffset || '0' }}"
           echo "1. ユーザー同期処理を実行..."
           echo "   パラメータ: processAll=$PROCESS_ALL, maxBatches=$MAX_BATCHES, batchSize=$BATCH_SIZE, deleteOrphanedUsers=$DELETE_ORPHANED"
+          echo "   決定されたnextOffset: ${{ steps.determine_offset.outputs.nextOffset || '0' }}"
           echo "   開始offset: $INITIAL_OFFSET"
           sync_response=$(curl -s -L -w "\n%{http_code}\n%{url_effective}" -X POST "$API_URL/api/sync-kintone-users" \
             -H "Content-Type: application/json" \
