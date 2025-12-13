@@ -276,8 +276,19 @@ jobs:
           echo "=========================================="
           
           # 実行結果をartifactとして保存（次回の実行で使用）
-          echo "$body" > sync-result.json
-          echo "実行結果をartifactとして保存しました"
+          # タイムアウトで中断された場合でも、部分的な結果を保存する
+          if [ -n "$body" ] && [ "$body" != "" ]; then
+            echo "$body" > sync-result.json
+            echo "実行結果をartifactとして保存しました"
+          else
+            echo "⚠️ 警告: レスポンスボディが空のため、artifactを保存できませんでした"
+            # タイムアウトで中断された場合でも、前回のoffsetを使用できるようにするため、
+            # 部分的な結果を保存する（nextOffsetとstoppedEarlyのみ）
+            if [ -n "$nextOffset" ] && [ "$nextOffset" != "N/A" ] && [ "$nextOffset" != "null" ]; then
+              echo "{\"nextOffset\": $nextOffset, \"stoppedEarly\": true, \"stoppedReason\": \"timeout\"}" > sync-result.json
+              echo "部分的な結果をartifactとして保存しました（nextOffset=$nextOffset）"
+            fi
+          fi
       
       - name: 実行結果をartifactとして保存
         if: always()
