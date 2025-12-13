@@ -148,6 +148,15 @@
         <label for="csvFile">CSVファイルを選択</label>
         <input type="file" id="csvFile" name="file" accept=".csv" required>
       </div>
+      <div class="form-group">
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="deleteMode" name="deleteMode" style="margin-right: 8px; width: auto;">
+          <span>削除モード（メールアドレスとkintoneレコードIDが一致したユーザーのみ削除）</span>
+        </label>
+        <p style="margin-top: 8px; font-size: 12px; color: #666;">
+          ⚠️ 削除モードを有効にすると、CSVに含まれるメールアドレスとkintoneレコードIDがSupabaseのユーザーと<strong>両方一致する場合のみ</strong>削除されます。
+        </p>
+      </div>
       <button type="submit" id="submitBtn">アップロードして登録</button>
     </form>
 
@@ -181,7 +190,8 @@
         • 1行目はヘッダー行（email, kintone_record_id）<br>
         • 2行目以降がデータ行<br>
         • 既存ユーザーは自動的にスキップされます<br>
-        • 無効なメールアドレスはエラーとして記録されます
+        • 無効なメールアドレスはエラーとして記録されます<br>
+        • <strong>削除モード:</strong> メールアドレスとkintoneレコードIDの<strong>両方</strong>が一致するユーザーのみ削除されます
       </p>
     </div>
   </div>
@@ -202,14 +212,24 @@
         return;
       }
 
+      const deleteMode = document.getElementById('deleteMode').checked;
+      if (deleteMode) {
+        if (!confirm('削除モードが有効です。メールアドレスとkintoneレコードIDが一致したユーザーが削除されます。続行しますか？')) {
+          return;
+        }
+      }
+
       // UI更新
       submitBtn.disabled = true;
+      submitBtn.textContent = deleteMode ? '削除処理中...' : '登録処理中...';
       loading.style.display = 'block';
       result.style.display = 'none';
 
       try {
         const formData = new FormData();
         formData.append('file', file);
+        const deleteMode = document.getElementById('deleteMode').checked;
+        formData.append('deleteMode', deleteMode.toString());
 
         const response = await fetch('/api/import-users-csv', {
           method: 'POST',
@@ -239,8 +259,9 @@
         result.className = 'result ' + (data.success ? 'success' : 'error');
 
         if (data.success) {
+          const isDeleteMode = deleteMode;
           result.innerHTML = `
-            <h3>✅ 登録完了</h3>
+            <h3>✅ ${isDeleteMode ? '削除' : '登録'}完了</h3>
             <p><strong>処理時間:</strong> ${data.duration}</p>
             <table>
               <tr>
@@ -251,10 +272,23 @@
                 <td>総件数</td>
                 <td>${data.total}件</td>
               </tr>
+              ${isDeleteMode ? `
+              <tr>
+                <td>削除</td>
+                <td>${data.deleted || 0}件</td>
+              </tr>
+              ` : `
               <tr>
                 <td>作成</td>
-                <td>${data.created}件</td>
+                <td>${data.created || 0}件</td>
               </tr>
+              ${data.updated ? `
+              <tr>
+                <td>更新</td>
+                <td>${data.updated}件</td>
+              </tr>
+              ` : ''}
+              `}
               <tr>
                 <td>スキップ（既存）</td>
                 <td>${data.skipped}件</td>
@@ -317,6 +351,7 @@
         `;
       } finally {
         submitBtn.disabled = false;
+        submitBtn.textContent = 'アップロードして登録';
       }
     });
   </script>
