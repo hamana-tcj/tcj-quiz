@@ -666,6 +666,8 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query, remainingFi
     return Response.json({
       ...results,
       message: `処理完了: ${messageParts.join(', ')}`,
+      remainingFilteredRecords: remainingRecords, // 次のバッチで処理する残りレコード（実際のレコード配列）
+      remainingFilteredCount: remainingRecords.length, // 次のバッチで処理する残りレコード数
     });
   } catch (error) {
     console.error('バッチ処理エラー:', error);
