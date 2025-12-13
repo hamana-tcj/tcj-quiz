@@ -731,6 +731,7 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
   let hasMore = true;
   let remainingFilteredRecords = []; // フィルタリング後の残りレコードを保持
   let previousHasMoreKintoneRecords = false; // 前回のkintoneに残りレコードがあるかのフラグ
+  let lastKintoneNextOffset = offset; // 最後にkintoneから取得した場合のnextOffsetを保持
 
   // タイムアウト対策: 処理時間を監視（Vercelの制限: 10秒/60秒）
   // Vercel Hobbyプラン: 10秒、Proプラン: 60秒
