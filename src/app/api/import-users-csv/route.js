@@ -140,9 +140,17 @@ export async function POST(request) {
 
       const columns = line.split(',').map(col => col.trim());
       const email = columns[emailIndex]?.toLowerCase().trim();
-      const kintoneRecordId = kintoneRecordIdIndex !== -1 
+      let kintoneRecordId = kintoneRecordIdIndex !== -1 
         ? columns[kintoneRecordIdIndex]?.trim() || null
         : null;
+      
+      // kintoneRecordIdの検証（空文字列、null、undefined、無効な値を除外）
+      if (kintoneRecordId) {
+        const kintoneRecordIdLower = kintoneRecordId.toLowerCase();
+        if (kintoneRecordIdLower === 'null' || kintoneRecordIdLower === 'undefined' || kintoneRecordId === '') {
+          kintoneRecordId = null;
+        }
+      }
 
       if (!email) {
         invalidEmails.push({ line: i + 1, reason: 'メールアドレスが空です' });
@@ -161,22 +169,29 @@ export async function POST(request) {
         // まずkintoneレコードIDで既存ユーザーを検索（メモリ上で検索）
         let existingUser = null;
         if (kintoneRecordId) {
-          existingUser = usersByKintoneRecordId.get(String(kintoneRecordId));
+          const kintoneRecordIdStr = String(kintoneRecordId);
+          existingUser = usersByKintoneRecordId.get(kintoneRecordIdStr);
+          
           if (existingUser) {
-            console.log(`[既存ユーザー発見] kintoneレコードID=${kintoneRecordId}, email=${email}, Supabase ID=${existingUser.id}`);
+            console.log(`[既存ユーザー発見] kintoneレコードID=${kintoneRecordIdStr}, CSV email=${email}, 既存email=${existingUser.email}, Supabase ID=${existingUser.id}`);
             
             // メールアドレスを正規化して比較
             const existingEmailNormalized = existingUser.email?.toLowerCase().trim();
-            if (existingEmailNormalized !== email) {
+            const csvEmailNormalized = email.toLowerCase().trim();
+            
+            console.log(`[メールアドレス比較] 既存=${existingEmailNormalized}, CSV=${csvEmailNormalized}, 一致=${existingEmailNormalized === csvEmailNormalized}`);
+            
+            if (existingEmailNormalized !== csvEmailNormalized) {
               // メールアドレスが変更されている場合は更新
               try {
-                console.log(`[メールアドレス更新] ${existingUser.email} → ${email} (レコードID: ${kintoneRecordId})`);
+                console.log(`[メールアドレス更新開始] ${existingUser.email} → ${email} (レコードID: ${kintoneRecordIdStr})`);
                 await updateUserEmail(existingUser.id, email);
                 updatedCount++;
                 console.log(`✅ メールアドレス更新成功: ${existingUser.email} → ${email}`);
                 existingEmails.push({ email, kintoneRecordId, line: i + 1, action: 'updated' });
               } catch (updateError) {
                 console.error(`❌ メールアドレス更新エラー (${email}):`, updateError);
+                console.error(`エラースタック:`, updateError.stack);
                 existingEmails.push({ email, kintoneRecordId, line: i + 1, reason: '更新エラー', error: updateError.message });
               }
             } else {
@@ -185,6 +200,11 @@ export async function POST(request) {
               existingEmails.push({ email, kintoneRecordId, line: i + 1, action: 'skipped' });
             }
             continue;
+          } else {
+            // kintoneレコードIDで見つからない場合のログ（デバッグ用）
+            if (i < 5) { // 最初の5件のみログ出力
+              console.log(`[デバッグ] kintoneレコードID=${kintoneRecordIdStr}で既存ユーザーが見つかりませんでした`);
+            }
           }
         }
 
@@ -193,24 +213,51 @@ export async function POST(request) {
         if (existingUserByEmail) {
           console.log(`[既存ユーザー発見] email=${email} (メールアドレスで検出)`);
           
-          // 既存ユーザーにkintoneレコードIDを追加（もしCSVに含まれている場合）
+          // 既存ユーザーのkintoneレコードIDを確認
+          const currentRecordId = existingUserByEmail.user_metadata?.kintone_record_id;
+          
+          // CSVにkintoneレコードIDが含まれている場合
           if (kintoneRecordId) {
-            try {
-              const currentRecordId = existingUserByEmail.user_metadata?.kintone_record_id;
-              if (!currentRecordId) {
+            if (!currentRecordId) {
+              // 既存ユーザーにkintoneレコードIDがない場合、追加
+              try {
                 console.log(`[メタデータ更新] 既存ユーザーにkintoneレコードIDを追加: email=${email}, recordId=${kintoneRecordId}`);
                 await updateUserMetadata(existingUserByEmail.id, kintoneRecordId);
                 updatedCount++;
                 console.log(`✅ kintoneレコードID追加成功: email=${email}, recordId=${kintoneRecordId}`);
-              } else if (currentRecordId !== String(kintoneRecordId)) {
-                console.log(`[警告] kintoneレコードIDが異なります: email=${email}, 既存ID=${currentRecordId}, CSV ID=${kintoneRecordId}`);
+              } catch (updateError) {
+                console.error(`❌ kintoneレコードID追加エラー (${email}):`, updateError);
               }
-            } catch (updateError) {
-              console.error(`❌ kintoneレコードID追加エラー (${email}):`, updateError);
+            } else if (currentRecordId === String(kintoneRecordId)) {
+              // kintoneレコードIDが一致する場合、メールアドレスが異なれば更新
+              // ただし、このケースでは既にメールアドレスで検索しているので、メールアドレスは同じはず
+              // 念のため確認
+              const existingEmailNormalized = existingUserByEmail.email?.toLowerCase().trim();
+              if (existingEmailNormalized !== email) {
+                // メールアドレスが異なる場合（通常は発生しないが、念のため）
+                try {
+                  console.log(`[メールアドレス更新] ${existingUserByEmail.email} → ${email} (レコードID: ${kintoneRecordId})`);
+                  await updateUserEmail(existingUserByEmail.id, email);
+                  updatedCount++;
+                  console.log(`✅ メールアドレス更新成功: ${existingUserByEmail.email} → ${email}`);
+                  existingEmails.push({ email, kintoneRecordId, line: i + 1, action: 'updated' });
+                } catch (updateError) {
+                  console.error(`❌ メールアドレス更新エラー (${email}):`, updateError);
+                  existingEmails.push({ email, kintoneRecordId, line: i + 1, reason: '更新エラー', error: updateError.message });
+                }
+              } else {
+                // メールアドレスが同じ場合はスキップ
+                existingEmails.push({ email, kintoneRecordId, line: i + 1, action: 'skipped' });
+              }
+            } else {
+              // kintoneレコードIDが異なる場合（別のユーザーの可能性）
+              console.log(`[警告] kintoneレコードIDが異なります: email=${email}, 既存ID=${currentRecordId}, CSV ID=${kintoneRecordId}`);
+              existingEmails.push({ email, kintoneRecordId, line: i + 1, action: 'skipped', reason: 'kintoneレコードIDが異なります' });
             }
+          } else {
+            // CSVにkintoneレコードIDが含まれていない場合、スキップ
+            existingEmails.push({ email, kintoneRecordId, line: i + 1, action: 'skipped' });
           }
-          
-          existingEmails.push({ email, kintoneRecordId, line: i + 1, action: 'skipped' });
           continue;
         }
 
