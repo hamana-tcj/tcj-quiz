@@ -15,11 +15,34 @@ export default function LoginPage() {
   const [resetEmail, setResetEmail] = useState('');
   const [resetMsg, setResetMsg] = useState('');
   const [resetError, setResetError] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   async function onSubmit(e) {
     e.preventDefault();
+    setLoginError(''); // エラーメッセージをリセット
+    
+    // メールアドレスまたはパスワードが空欄の場合は、HTML5のバリデーションに任せる
+    if (!email.trim() || !password.trim()) {
+      return;
+    }
+    
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return;
+    if (error) {
+      // エラーメッセージを日本語に変換
+      const errorMessage = error.message.toLowerCase();
+      if (errorMessage.includes('invalid login credentials') || 
+          errorMessage.includes('invalid credentials') ||
+          errorMessage.includes('email not confirmed') ||
+          errorMessage.includes('wrong password') ||
+          errorMessage.includes('user not found')) {
+        setLoginError('メールアドレスかパスワードが間違っています');
+      } else {
+        setLoginError(`ログインエラー: ${error.message}`);
+      }
+      return;
+    }
+    
+    // ログイン成功
     router.push(`/${projectCode}/subjects`);
   }
 
@@ -90,7 +113,10 @@ export default function LoginPage() {
               type="email"
               placeholder="MYページログイン時と同じメールアドレス"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setLoginError(''); // 入力時にエラーメッセージをクリア
+              }}
               className="w-full border rounded p-2"
               required
             />
@@ -106,7 +132,10 @@ export default function LoginPage() {
                 type={showPassword ? "text" : "password"}
                 placeholder="初回ログインの際は「新規登録」より発行"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setLoginError(''); // 入力時にエラーメッセージをクリア
+                }}
                 className="w-full border rounded p-2 pr-10"
                 required
               />
@@ -129,6 +158,13 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+
+          {/* ログインエラーメッセージ */}
+          {loginError && (
+            <div className="text-sm text-red-600" role="alert">
+              {loginError}
+            </div>
+          )}
 
           {/* ログインボタン */}
           <button 
