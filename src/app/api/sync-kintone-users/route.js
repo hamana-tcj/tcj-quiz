@@ -294,110 +294,124 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query, remainingFi
   };
 
   try {
-    // kintoneからレコード取得
-    // 注意: テーブル型フィールドはクエリで直接検索できないため、
-    // 全レコードを取得してからJavaScript側でフィルタリング
-    // フィルタリング後に必要な件数を確保するため、多めに取得（最大500件）
-    const fetchLimit = Math.max(batchSize * 5, 500); // フィルタリング後の件数を考慮して多めに取得
-    const allRecords = await getKintoneRecords({
-      limit: fetchLimit,
-      offset: offset,
-      query: query || '', // カスタムクエリが指定されている場合は使用
-    });
-
-    console.log(`[バッチ処理開始] offset=${offset}, batchSize=${batchSize}, fetchLimit=${fetchLimit}`);
-    console.log(`kintoneから取得: ${allRecords.length}件 (offset: ${offset}, limit: ${fetchLimit})`);
-
-    if (allRecords.length === 0) {
-      console.log(`[バッチ処理終了] レコードがありません`);
-      return Response.json({
-        ...results,
-        message: '処理するレコードがありません',
+    console.log(`[バッチ処理開始] offset=${offset}, batchSize=${batchSize}, 前回残り=${remainingFilteredRecords.length}件`);
+    
+    // 前のバッチの残りレコードがある場合、kintoneから新しいレコードを取得しない
+    // 残りレコードを処理し終わった後に、次のoffsetから新しいレコードを取得する
+    let allRecords = [];
+    let records = [];
+    
+    if (remainingFilteredRecords.length > 0) {
+      // 残りレコードがある場合、kintoneから新しいレコードを取得しない
+      console.log(`[残りレコード処理] 前回の残り${remainingFilteredRecords.length}件を処理します（kintoneからは取得しません）`);
+      records = []; // 新しいレコードは取得しない
+    } else {
+      // 残りレコードがない場合、kintoneから新しいレコードを取得
+      // 注意: テーブル型フィールドはクエリで直接検索できないため、
+      // 全レコードを取得してからJavaScript側でフィルタリング
+      // フィルタリング後に必要な件数を確保するため、多めに取得（最大500件）
+      const fetchLimit = Math.max(batchSize * 5, 500); // フィルタリング後の件数を考慮して多めに取得
+      allRecords = await getKintoneRecords({
+        limit: fetchLimit,
+        offset: offset,
+        query: query || '', // カスタムクエリが指定されている場合は使用
       });
-    }
 
-    // permissionGroupテーブルのgroupNameフィールドでフィルタリング
-    // クエリが指定されていない場合のみ、デフォルト条件を適用
-    let records = allRecords;
-    if (!query || query.trim() === '') {
-      const beforeFilterCount = allRecords.length;
-      records = allRecords.filter(record => {
-        // permissionGroupテーブル型フィールドを確認
-        const permissionGroup = record.permissionGroup;
-        if (!permissionGroup || !permissionGroup.value || !Array.isArray(permissionGroup.value)) {
-          return false;
-        }
+      console.log(`kintoneから取得: ${allRecords.length}件 (offset: ${offset}, limit: ${fetchLimit})`);
 
-        // テーブル内の任意の行で、groupNameが条件に一致するかチェック
-        return permissionGroup.value.some(row => {
-          const groupName = row.value?.groupName?.value;
-          if (!groupName) return false;
-          
-          return groupName === '試験対策集中講座（養成）' || 
-                 groupName === '合格パック単体（養成）';
-        });
-      });
-      
-      console.log(`[フィルタリング] ${beforeFilterCount}件 → ${records.length}件 (条件に一致したレコード数)`);
-      
-      // デバッグ: 最初のレコードの構造を確認（条件に一致する場合）
-      if (records.length > 0) {
-        const firstRecord = records[0];
-        const permissionGroup = firstRecord.permissionGroup;
-        const groupNames = permissionGroup?.value?.map(row => row.value?.groupName?.value).filter(Boolean) || [];
-        console.log('条件に一致したレコード例:', {
-          email: extractEmailFromRecord(firstRecord, emailFieldCode),
-          permissionGroup: permissionGroup ? '存在' : 'なし',
-          groupNames: groupNames,
-          groupNamesCount: groupNames.length, // 複数値の数を表示
-        });
-        
-        // 複数値がある場合の詳細を表示（最初の3件のみ）
-        if (groupNames.length > 1) {
-          console.log(`[複数値検出] レコードに${groupNames.length}個のgroupNameが含まれています:`, groupNames);
-        }
-      } else if (beforeFilterCount > 0) {
-        // フィルタリングで0件になった場合、レコードの構造を確認
-        console.log('警告: フィルタリング後に0件になりました。レコード構造を確認:');
-        const sampleRecord = allRecords[0];
-        const permissionGroup = sampleRecord?.permissionGroup;
-        const groupNames = permissionGroup?.value?.map(row => row.value?.groupName?.value).filter(Boolean) || [];
-        console.log('サンプルレコードのpermissionGroup:', {
-          exists: !!permissionGroup,
-          hasValue: !!permissionGroup?.value,
-          isArray: Array.isArray(permissionGroup?.value),
-          groupNames: groupNames,
-          groupNamesCount: groupNames.length,
-          // テーブル型フィールドの構造を詳しく確認
-          rawStructure: permissionGroup ? {
-            hasValue: !!permissionGroup.value,
-            valueType: typeof permissionGroup.value,
-            isArray: Array.isArray(permissionGroup.value),
-            arrayLength: Array.isArray(permissionGroup.value) ? permissionGroup.value.length : 0,
-            firstRow: Array.isArray(permissionGroup.value) && permissionGroup.value.length > 0 ? {
-              hasValue: !!permissionGroup.value[0].value,
-              hasGroupName: !!permissionGroup.value[0].value?.groupName,
-              groupNameValue: permissionGroup.value[0].value?.groupName?.value,
-            } : null,
-          } : null,
+      if (allRecords.length === 0) {
+        console.log(`[バッチ処理終了] レコードがありません`);
+        return Response.json({
+          ...results,
+          message: '処理するレコードがありません',
         });
       }
-      
-      // 統計情報: フィルタリング条件に一致しないレコードの理由を分析（最初のバッチのみ詳細出力）
-      if (beforeFilterCount > 0 && records.length < beforeFilterCount && offset === 0) {
-        const filteredOut = beforeFilterCount - records.length;
-        const noPermissionGroup = allRecords.filter(r => !r.permissionGroup || !r.permissionGroup.value || !Array.isArray(r.permissionGroup.value)).length;
-        const hasPermissionGroupButNoMatch = allRecords.filter(r => {
-          const pg = r.permissionGroup;
-          if (!pg || !pg.value || !Array.isArray(pg.value)) return false;
-          const hasMatch = pg.value.some(row => {
+
+      // permissionGroupテーブルのgroupNameフィールドでフィルタリング
+      // クエリが指定されていない場合のみ、デフォルト条件を適用
+      if (!query || query.trim() === '') {
+        const beforeFilterCount = allRecords.length;
+        records = allRecords.filter(record => {
+          // permissionGroupテーブル型フィールドを確認
+          const permissionGroup = record.permissionGroup;
+          if (!permissionGroup || !permissionGroup.value || !Array.isArray(permissionGroup.value)) {
+            return false;
+          }
+
+          // テーブル内の任意の行で、groupNameが条件に一致するかチェック
+          return permissionGroup.value.some(row => {
             const groupName = row.value?.groupName?.value;
-            return groupName === '試験対策集中講座（養成）' || groupName === '合格パック単体（養成）';
+            if (!groupName) return false;
+            
+            return groupName === '試験対策集中講座（養成）' || 
+                   groupName === '合格パック単体（養成）';
           });
-          return !hasMatch;
-        }).length;
+        });
         
-        console.log(`[フィルタリング統計] 除外: ${filteredOut}件 (permissionGroupなし: ${noPermissionGroup}件, 条件不一致: ${hasPermissionGroupButNoMatch}件)`);
+        console.log(`[フィルタリング] ${beforeFilterCount}件 → ${records.length}件 (条件に一致したレコード数)`);
+        
+        // デバッグ: 最初のレコードの構造を確認（条件に一致する場合）
+        if (records.length > 0) {
+          const firstRecord = records[0];
+          const permissionGroup = firstRecord.permissionGroup;
+          const groupNames = permissionGroup?.value?.map(row => row.value?.groupName?.value).filter(Boolean) || [];
+          console.log('条件に一致したレコード例:', {
+            email: extractEmailFromRecord(firstRecord, emailFieldCode),
+            permissionGroup: permissionGroup ? '存在' : 'なし',
+            groupNames: groupNames,
+            groupNamesCount: groupNames.length, // 複数値の数を表示
+          });
+          
+          // 複数値がある場合の詳細を表示（最初の3件のみ）
+          if (groupNames.length > 1) {
+            console.log(`[複数値検出] レコードに${groupNames.length}個のgroupNameが含まれています:`, groupNames);
+          }
+        } else if (beforeFilterCount > 0) {
+          // フィルタリングで0件になった場合、レコードの構造を確認
+          console.log('警告: フィルタリング後に0件になりました。レコード構造を確認:');
+          const sampleRecord = allRecords[0];
+          const permissionGroup = sampleRecord?.permissionGroup;
+          const groupNames = permissionGroup?.value?.map(row => row.value?.groupName?.value).filter(Boolean) || [];
+          console.log('サンプルレコードのpermissionGroup:', {
+            exists: !!permissionGroup,
+            hasValue: !!permissionGroup?.value,
+            isArray: Array.isArray(permissionGroup?.value),
+            groupNames: groupNames,
+            groupNamesCount: groupNames.length,
+            // テーブル型フィールドの構造を詳しく確認
+            rawStructure: permissionGroup ? {
+              hasValue: !!permissionGroup.value,
+              valueType: typeof permissionGroup.value,
+              isArray: Array.isArray(permissionGroup.value),
+              arrayLength: Array.isArray(permissionGroup.value) ? permissionGroup.value.length : 0,
+              firstRow: Array.isArray(permissionGroup.value) && permissionGroup.value.length > 0 ? {
+                hasValue: !!permissionGroup.value[0].value,
+                hasGroupName: !!permissionGroup.value[0].value?.groupName,
+                groupNameValue: permissionGroup.value[0].value?.groupName?.value,
+              } : null,
+            } : null,
+          });
+        }
+        
+        // 統計情報: フィルタリング条件に一致しないレコードの理由を分析（最初のバッチのみ詳細出力）
+        if (beforeFilterCount > 0 && records.length < beforeFilterCount && offset === 0) {
+          const filteredOut = beforeFilterCount - records.length;
+          const noPermissionGroup = allRecords.filter(r => !r.permissionGroup || !r.permissionGroup.value || !Array.isArray(r.permissionGroup.value)).length;
+          const hasPermissionGroupButNoMatch = allRecords.filter(r => {
+            const pg = r.permissionGroup;
+            if (!pg || !pg.value || !Array.isArray(pg.value)) return false;
+            const hasMatch = pg.value.some(row => {
+              const groupName = row.value?.groupName?.value;
+              return groupName === '試験対策集中講座（養成）' || groupName === '合格パック単体（養成）';
+            });
+            return !hasMatch;
+          }).length;
+          
+          console.log(`[フィルタリング統計] 除外: ${filteredOut}件 (permissionGroupなし: ${noPermissionGroup}件, 条件不一致: ${hasPermissionGroupButNoMatch}件)`);
+        }
+      } else {
+        // クエリが指定されている場合、フィルタリングしない
+        records = allRecords;
       }
     }
 
@@ -623,15 +637,16 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query, remainingFi
     // 次のバッチがあるかチェック
     // フィルタリング後の残りレコードがある場合、またはkintoneから取得したレコード数がlimitと同じ場合
     const hasMoreFilteredRecords = remainingRecords.length > 0;
-    const hasMoreKintoneRecords = allRecords.length >= fetchLimit;
+    const hasMoreKintoneRecords = remainingFilteredRecords.length === 0 && allRecords.length >= (Math.max(batchSize * 5, 500));
     
-    // kintone APIの制限: offsetは最大10,000件まで
-    // offsetが10,000を超える場合は、レコードIDベースの取得に切り替える
-    const nextOffset = offset + allRecords.length;
-    const useRecordIdBased = nextOffset > 10000;
-    
-    if (hasMoreFilteredRecords || hasMoreKintoneRecords) {
-      results.hasMore = true;
+    // 残りレコードがある場合、offsetを進めない（次のバッチで残りレコードを処理）
+    // 残りレコードがない場合のみ、offsetを進める
+    let nextOffset = offset;
+    if (remainingFilteredRecords.length === 0 && allRecords.length > 0) {
+      // kintone APIの制限: offsetは最大10,000件まで
+      // offsetが10,000を超える場合は、レコードIDベースの取得に切り替える
+      const calculatedNextOffset = offset + allRecords.length;
+      const useRecordIdBased = calculatedNextOffset > 10000;
       
       if (useRecordIdBased) {
         // レコードIDベースの取得に切り替え
@@ -642,17 +657,23 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query, remainingFi
         
         if (lastRecordId) {
           // レコードIDをnextOffsetとして使用（文字列として保存）
-          results.nextOffset = `id:${lastRecordId}`;
+          nextOffset = `id:${lastRecordId}`;
           console.log(`⚠️ offsetが10,000を超えるため、レコードIDベースの取得に切り替えます: offset=${offset} → nextRecordId=${lastRecordId}`);
         } else {
           // レコードIDが取得できない場合は、offsetを維持（エラーになる可能性がある）
-          results.nextOffset = nextOffset;
-          console.warn(`⚠️ レコードIDが取得できませんでした。offset=${nextOffset}で続行しますが、エラーになる可能性があります。`);
+          nextOffset = calculatedNextOffset;
+          console.warn(`⚠️ レコードIDが取得できませんでした。offset=${calculatedNextOffset}で続行しますが、エラーになる可能性があります。`);
         }
       } else {
-        results.nextOffset = nextOffset;
-        console.log(`次のバッチがあります: offset=${offset} → nextOffset=${results.nextOffset}, 取得レコード数=${allRecords.length}, 残りフィルタ済み=${remainingRecords.length}件, kintone残り=${hasMoreKintoneRecords ? 'あり' : 'なし'}`);
+        nextOffset = calculatedNextOffset;
       }
+    }
+    
+    results.nextOffset = nextOffset;
+    
+    if (hasMoreFilteredRecords || hasMoreKintoneRecords) {
+      results.hasMore = true;
+      console.log(`次のバッチがあります: offset=${offset} → nextOffset=${results.nextOffset}, 取得レコード数=${allRecords.length}, 残りフィルタ済み=${remainingRecords.length}件, kintone残り=${hasMoreKintoneRecords ? 'あり' : 'なし'}`);
     } else {
       console.log(`次のバッチはありません: offset=${offset}, 取得レコード数=${allRecords.length}, フィルタ済み=${records.length}件`);
     }
