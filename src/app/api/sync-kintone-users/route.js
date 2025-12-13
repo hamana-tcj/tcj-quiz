@@ -801,6 +801,14 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
         }
       }
       
+      // result.nextOffsetが更新されている場合（kintoneから取得した場合）、lastKintoneNextOffsetを更新
+      // これは、残りレコードを処理し終わった後、次のkintone取得で使用するため
+      if (result.nextOffset !== currentOffset && result.nextOffset !== offset) {
+        // kintoneから取得した場合、nextOffsetを保持
+        lastKintoneNextOffset = result.nextOffset;
+        console.log(`[lastKintoneNextOffset更新] ${lastKintoneNextOffset}`);
+      }
+      
       // 次のバッチがあるかチェック
       // 残りレコードがある場合、またはkintoneから取得できるレコードがまだある場合
       hasMore = (remainingFilteredRecords.length > 0) || (result.hasMore === true) || previousHasMoreKintoneRecords;
@@ -809,7 +817,23 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
         // 残りレコードがある場合はoffsetを進めない（次のバッチで残りレコードを処理）
         // 残りレコードがない場合のみoffsetを進める
         if (remainingFilteredRecords.length === 0) {
-          currentOffset = result.nextOffset || (typeof currentOffset === 'number' ? currentOffset + batchSize : 0);
+          // result.nextOffsetがoffsetと同じ場合（kintoneから取得していない場合）、
+          // 前回のバッチでkintoneから取得した場合のnextOffsetを使用
+          if (result.nextOffset === currentOffset || result.nextOffset === offset) {
+            // kintoneから取得していない場合、最後にkintoneから取得したnextOffsetを使用
+            if (lastKintoneNextOffset !== currentOffset && lastKintoneNextOffset !== offset) {
+              // 最後にkintoneから取得したnextOffsetを使用
+              currentOffset = lastKintoneNextOffset;
+              console.log(`[offset更新] 最後のkintone取得のnextOffsetを使用: ${previousOffset} → ${currentOffset}`);
+            } else {
+              // 最後のkintone取得のnextOffsetが利用できない場合、batchSize分進める
+              currentOffset = typeof currentOffset === 'number' ? currentOffset + batchSize : 0;
+              console.log(`[offset更新] batchSize分進める: ${previousOffset} → ${currentOffset}`);
+            }
+          } else {
+            // result.nextOffsetが更新されている場合、それを使用
+            currentOffset = result.nextOffset;
+          }
           // offsetを進めたので、前回のフラグをリセット
           // ただし、result.hasMoreがtrueの場合は、まだkintoneに残りレコードがあるので保持
           if (result.hasMore !== true) {
