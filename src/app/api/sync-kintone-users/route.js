@@ -830,8 +830,13 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
           // currentOffsetと等しいかどうかに関わらず、lastKintoneNextOffsetを使用する
           if (lastKintoneNextOffset !== offset) {
             // 最後にkintoneから取得したnextOffsetを使用
+            // currentOffsetが既にlastKintoneNextOffsetと等しい場合でも、明示的に設定する
             currentOffset = lastKintoneNextOffset;
-            console.log(`[offset更新] 最後のkintone取得のnextOffsetを使用: ${previousOffset} → ${currentOffset}`);
+            if (previousOffset === currentOffset) {
+              console.log(`[offset更新] 最後のkintone取得のnextOffsetを使用（既に同じ値）: ${currentOffset}`);
+            } else {
+              console.log(`[offset更新] 最後のkintone取得のnextOffsetを使用: ${previousOffset} → ${currentOffset}`);
+            }
           } else {
             // lastKintoneNextOffsetがoffsetと等しい場合は既に処理済みなので、batchSize分進める
             currentOffset = typeof currentOffset === 'number' ? currentOffset + batchSize : 0;
@@ -884,6 +889,11 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
   console.log(`=== 全件処理完了 ===`);
   console.log(`処理時間: ${duration}秒`);
   console.log(`バッチ数: ${batchCount}`);
+  if (allResults.stoppedEarly) {
+    console.warn(`⚠️ 警告: 処理が途中で中断されました（理由: ${allResults.stoppedReason || '不明'}）`);
+    console.warn(`   タイムアウト（${MAX_EXECUTION_TIME / 1000}秒）またはmaxBatches（${maxBatches}）に達した可能性があります`);
+    console.warn(`   残りのレコードを処理するには、次のoffsetから再実行してください: ${currentOffset}`);
+  }
   console.log(`フィルタリング条件に一致したレコード総数: ${totalFilteredRecords}件`);
   console.log(`作成: ${allResults.totalCreated}件`);
   if (allResults.totalUpdated > 0) {
@@ -919,7 +929,9 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
     return Response.json({
     ...allResults,
     message: `全件処理完了: ${batchCount}バッチ処理, 合計 ${messageParts.join(', ')}`,
-    stoppedEarly: batchCount >= maxBatches && hasMore,
+    stoppedEarly: allResults.stoppedEarly || (batchCount >= maxBatches && hasMore),
+    stoppedReason: allResults.stoppedReason || (batchCount >= maxBatches && hasMore ? 'maxBatches' : null),
+    nextOffset: currentOffset, // 次の実行で使用するoffset
     duration: `${duration}秒`,
   });
 }
