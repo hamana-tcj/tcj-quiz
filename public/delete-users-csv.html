@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ユーザー一括登録（CSV）</title>
+  <title>ユーザー一括削除（CSV）</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -27,6 +27,18 @@
       margin-bottom: 30px;
       font-size: 14px;
     }
+    .warning {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      color: #856404;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    .warning strong {
+      display: block;
+      margin-bottom: 8px;
+    }
     .form-group {
       margin-bottom: 20px;
     }
@@ -45,11 +57,11 @@
       cursor: pointer;
     }
     input[type="file"]:hover {
-      border-color: #0070f3;
-      background: #f0f7ff;
+      border-color: #dc3545;
+      background: #fff5f5;
     }
     button {
-      background: #0070f3;
+      background: #dc3545;
       color: white;
       border: none;
       padding: 12px 24px;
@@ -61,7 +73,7 @@
       margin-top: 10px;
     }
     button:hover {
-      background: #0051cc;
+      background: #c82333;
     }
     button:disabled {
       background: #ccc;
@@ -125,7 +137,7 @@
     }
     .spinner {
       border: 3px solid #f3f3f3;
-      border-top: 3px solid #0070f3;
+      border-top: 3px solid #dc3545;
       border-radius: 50%;
       width: 30px;
       height: 30px;
@@ -140,15 +152,21 @@
 </head>
 <body>
   <div class="container">
-    <h1>ユーザー一括登録（CSV）</h1>
-    <p class="subtitle">CSVファイルをアップロードして、Supabase Authにユーザーを一括登録します</p>
+    <h1>ユーザー一括削除（CSV）</h1>
+    <p class="subtitle">CSVファイルをアップロードして、Supabase Authからユーザーを一括削除します</p>
+
+    <div class="warning">
+      <strong>⚠️ 警告: この操作は取り消せません</strong>
+      <p>CSVに含まれるメールアドレスとkintoneレコードIDがSupabaseのユーザーと<strong>両方一致する場合のみ</strong>削除されます。</p>
+      <p>メールアドレスまたはkintoneレコードIDのどちらかが一致しない場合は削除されません。</p>
+    </div>
 
     <form id="uploadForm">
       <div class="form-group">
         <label for="csvFile">CSVファイルを選択</label>
         <input type="file" id="csvFile" name="file" accept=".csv" required>
       </div>
-      <button type="submit" id="submitBtn">アップロードして登録</button>
+      <button type="submit" id="submitBtn">アップロードして削除</button>
     </form>
 
     <div class="loading" id="loading">
@@ -160,15 +178,7 @@
 
     <div class="example">
       <h3>CSV形式の例</h3>
-      <p><strong>形式1: メールアドレスのみ</strong></p>
-      <code>
-        email<br>
-        user1@example.com<br>
-        user2@example.com<br>
-        user3@example.com
-      </code>
-      
-      <p style="margin-top: 15px;"><strong>形式2: メールアドレス + kintoneレコードID</strong></p>
+      <p><strong>必須: メールアドレス + kintoneレコードID</strong></p>
       <code>
         email,kintone_record_id<br>
         user1@example.com,123<br>
@@ -180,8 +190,9 @@
         <strong>注意事項:</strong><br>
         • 1行目はヘッダー行（email, kintone_record_id）<br>
         • 2行目以降がデータ行<br>
-        • 既存ユーザーは自動的にスキップされます<br>
-        • 無効なメールアドレスはエラーとして記録されます
+        • <strong>メールアドレスとkintoneレコードIDの両方が一致するユーザーのみ削除されます</strong><br>
+        • どちらかが一致しない場合は削除されません（安全のため）<br>
+        • 無効なメールアドレスやkintone_record_idが空の場合はエラーとして記録されます
       </p>
     </div>
   </div>
@@ -202,8 +213,19 @@
         return;
       }
 
+      // 確認ダイアログ
+      if (!confirm('⚠️ 警告: この操作は取り消せません。\n\nCSVに含まれるメールアドレスとkintoneレコードIDが一致したユーザーが削除されます。\n\n続行しますか？')) {
+        return;
+      }
+
+      // 二重確認
+      if (!confirm('本当に削除を実行しますか？\n\nこの操作は取り消せません。')) {
+        return;
+      }
+
       // UI更新
       submitBtn.disabled = true;
+      submitBtn.textContent = '削除処理中...';
       loading.style.display = 'block';
       result.style.display = 'none';
 
@@ -211,7 +233,7 @@
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('/api/import-users-csv', {
+        const response = await fetch('/api/delete-users-csv', {
           method: 'POST',
           body: formData,
         });
@@ -240,7 +262,7 @@
 
         if (data.success) {
           result.innerHTML = `
-            <h3>✅ 登録完了</h3>
+            <h3>✅ 削除完了</h3>
             <p><strong>処理時間:</strong> ${data.duration}</p>
             <table>
               <tr>
@@ -252,17 +274,11 @@
                 <td>${data.total}件</td>
               </tr>
               <tr>
-                <td>作成</td>
-                <td>${data.created || 0}件</td>
+                <td>削除</td>
+                <td>${data.deleted || 0}件</td>
               </tr>
-              ${data.updated ? `
               <tr>
-                <td>更新</td>
-                <td>${data.updated}件</td>
-              </tr>
-              ` : ''}
-              <tr>
-                <td>スキップ（既存）</td>
+                <td>スキップ（一致しない）</td>
                 <td>${data.skipped}件</td>
               </tr>
               <tr>
@@ -287,30 +303,10 @@
             ` : ''}
           `;
         } else {
-          // エラー時、部分的な結果がある場合は表示
-          const hasPartialResults = data.partialResults && (
-            data.partialResults.created > 0 || 
-            data.partialResults.skipped > 0
-          );
-          
           result.innerHTML = `
             <h3>❌ エラー</h3>
-            <p><strong>エラー内容:</strong> ${data.error || '登録処理中にエラーが発生しました'}</p>
+            <p><strong>エラー内容:</strong> ${data.error || '削除処理中にエラーが発生しました'}</p>
             ${data.errorType ? `<p><strong>エラータイプ:</strong> ${data.errorType}</p>` : ''}
-            ${hasPartialResults ? `
-              <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 4px;">
-                <h4>⚠️ 部分的な結果</h4>
-                <p>エラーが発生しましたが、一部のユーザーは登録できています:</p>
-                <ul>
-                  <li>作成: ${data.partialResults.created}件</li>
-                  <li>スキップ: ${data.partialResults.skipped}件</li>
-                  <li>失敗: ${data.partialResults.failed}件</li>
-                </ul>
-                <p style="margin-top: 10px; font-size: 12px;">
-                  <strong>推奨:</strong> エラーを解決してから、残りのユーザーを再度インポートしてください。
-                </p>
-              </div>
-            ` : ''}
           `;
         }
       } catch (error) {
@@ -323,10 +319,10 @@
         `;
       } finally {
         submitBtn.disabled = false;
+        submitBtn.textContent = 'アップロードして削除';
       }
     });
   </script>
 </body>
 </html>
-
 

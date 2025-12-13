@@ -29,7 +29,7 @@
  * }
  */
 
-import { createUsersBatch, userExists, getUserByKintoneRecordId, updateUserEmail, updateUserMetadata, deleteUser } from '@/lib/supabaseAdmin';
+import { createUsersBatch, userExists, getUserByKintoneRecordId, updateUserEmail, updateUserMetadata } from '@/lib/supabaseAdmin';
 import { isValidEmail } from '@/lib/kintoneClient';
 
 export async function POST(request) {
@@ -40,7 +40,6 @@ export async function POST(request) {
   try {
     const formData = await request.formData();
     const file = formData.get('file');
-    const deleteMode = formData.get('deleteMode') === 'true'; // 削除モード
 
     if (!file) {
       return Response.json(
@@ -79,16 +78,14 @@ export async function POST(request) {
       ? header.indexOf('record_id')
       : -1;
 
-    console.log(`CSV解析: ヘッダー=${header.join(', ')}, 総行数=${lines.length - 1}件, 削除モード=${deleteMode}`);
+    console.log(`CSV解析: ヘッダー=${header.join(', ')}, 総行数=${lines.length - 1}件`);
 
     // データ行を解析
     const recordsToCreate = [];
     const existingEmails = [];
     const invalidEmails = [];
-    const recordsToDelete = []; // 削除対象
     let processedCount = 0;
     let updatedCount = 0;
-    let deletedCount = 0;
 
     // 最適化: 全ユーザーを一度に取得してメモリ上で検索
     console.log('[最適化] 全ユーザーを一度に取得してメモリ上で検索します...');
@@ -167,31 +164,7 @@ export async function POST(request) {
 
       processedCount++;
 
-      // 削除モードの場合
-      if (deleteMode) {
-        if (!kintoneRecordId) {
-          invalidEmails.push({ line: i + 1, email, reason: '削除モードではkintone_record_idが必要です' });
-          continue;
-        }
-
-        // メールアドレスとkintoneレコードIDの両方が一致するユーザーを検索
-        const kintoneRecordIdStr = String(kintoneRecordId);
-        const existingUserByKintoneId = usersByKintoneRecordId.get(kintoneRecordIdStr);
-        const existingUserByEmail = usersByEmail.get(email);
-
-        // 両方が一致する場合のみ削除対象
-        if (existingUserByKintoneId && existingUserByEmail && 
-            existingUserByKintoneId.id === existingUserByEmail.id) {
-          console.log(`[削除対象] email=${email}, kintoneRecordId=${kintoneRecordIdStr}, userId=${existingUserByKintoneId.id}`);
-          recordsToDelete.push({ email, kintoneRecordId: kintoneRecordIdStr, userId: existingUserByKintoneId.id });
-        } else {
-          console.log(`[削除対象外] email=${email}, kintoneRecordId=${kintoneRecordIdStr} - 一致するユーザーが見つかりません`);
-          existingEmails.push({ email, kintoneRecordId, line: i + 1, action: 'skipped', reason: '一致するユーザーが見つかりません' });
-        }
-        continue;
-      }
-
-      // 既存ユーザーチェック（通常モード）
+      // 既存ユーザーチェック
       try {
         // まずkintoneレコードIDで既存ユーザーを検索（メモリ上で検索）
         let existingUser = null;
@@ -297,65 +270,7 @@ export async function POST(request) {
       }
     }
 
-    console.log(`CSV解析完了: 処理対象=${processedCount}件, 新規作成予定=${recordsToCreate.length}件, 既存=${existingEmails.length}件, 更新=${updatedCount}件, 削除予定=${recordsToDelete.length}件, 無効=${invalidEmails.length}件`);
-
-    // 削除モードの場合、削除処理を実行
-    if (deleteMode && recordsToDelete.length > 0) {
-      console.log(`ユーザー削除開始: ${recordsToDelete.length}件`);
-      
-      const deleteResults = {
-        success: [],
-        failed: [],
-        notFound: [],
-      };
-
-      for (const record of recordsToDelete) {
-        try {
-          await deleteUser(record.userId);
-          deletedCount++;
-          deleteResults.success.push({ email: record.email, kintoneRecordId: record.kintoneRecordId });
-          console.log(`✅ ユーザー削除成功: email=${record.email}, kintoneRecordId=${record.kintoneRecordId}`);
-        } catch (deleteError) {
-          console.error(`❌ ユーザー削除エラー (${record.email}):`, deleteError);
-          deleteResults.failed.push({ 
-            email: record.email, 
-            kintoneRecordId: record.kintoneRecordId, 
-            error: deleteError.message 
-          });
-        }
-      }
-
-      console.log(`ユーザー削除完了: 成功=${deleteResults.success.length}件, 失敗=${deleteResults.failed.length}件`);
-
-      const endTime = Date.now();
-      const duration = ((endTime - startTime) / 1000).toFixed(2);
-
-      const result = {
-        success: true,
-        total: processedCount,
-        deleted: deletedCount,
-        skipped: existingEmails.length,
-        failed: deleteResults.failed.length + invalidEmails.length,
-        errors: [
-          ...deleteResults.failed.map(f => ({ email: f.email, error: f.error })),
-          ...invalidEmails.map(e => ({ line: e.line, email: e.email, error: e.reason })),
-        ],
-        details: {
-          processed: processedCount,
-          deleted: deletedCount,
-          skipped: existingEmails.length,
-          failed: deleteResults.failed.length + invalidEmails.length,
-          deleteResults: deleteResults.success.slice(0, 10), // 最初の10件のみ表示
-          invalidEmails: invalidEmails.slice(0, 10), // 最初の10件のみ表示
-        },
-        duration: `${duration}秒`,
-      };
-
-      console.log(`=== CSV削除処理完了（処理時間: ${duration}秒） ===`);
-      console.log(`結果: 削除=${result.deleted}件, スキップ=${result.skipped}件, 失敗=${result.failed}件`);
-
-      return Response.json(result);
-    }
+    console.log(`CSV解析完了: 処理対象=${processedCount}件, 新規作成予定=${recordsToCreate.length}件, 既存=${existingEmails.length}件, 更新=${updatedCount}件, 無効=${invalidEmails.length}件`);
 
     // 新規ユーザーを作成（バッチ処理で分割してタイムアウト対策）
     let createResults = { success: [], skipped: [], failed: [] };
@@ -425,7 +340,6 @@ export async function POST(request) {
       total: processedCount,
       created: createResults.success.length,
       updated: updatedCount,
-      deleted: deletedCount,
       skipped: existingEmails.length + createResults.skipped.length + skippedFromFailed.length,
       failed: actualFailed.length + invalidEmails.length,
       errors: [
@@ -436,7 +350,6 @@ export async function POST(request) {
         processed: processedCount,
         created: createResults.success.length,
         updated: updatedCount,
-        deleted: deletedCount,
         skipped: existingEmails.length + createResults.skipped.length + skippedFromFailed.length,
         failed: actualFailed.length + invalidEmails.length,
         existingEmails: existingEmails.slice(0, 10), // 最初の10件のみ表示
