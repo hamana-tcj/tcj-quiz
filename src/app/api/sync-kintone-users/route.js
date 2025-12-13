@@ -383,8 +383,8 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
         });
       }
       
-      // 統計情報: フィルタリング条件に一致しないレコードの理由を分析
-      if (beforeFilterCount > 0 && records.length < beforeFilterCount) {
+      // 統計情報: フィルタリング条件に一致しないレコードの理由を分析（最初のバッチのみ詳細出力）
+      if (beforeFilterCount > 0 && records.length < beforeFilterCount && offset === 0) {
         const filteredOut = beforeFilterCount - records.length;
         const noPermissionGroup = allRecords.filter(r => !r.permissionGroup || !r.permissionGroup.value || !Array.isArray(r.permissionGroup.value)).length;
         const hasPermissionGroupButNoMatch = allRecords.filter(r => {
@@ -397,9 +397,7 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
           return !hasMatch;
         }).length;
         
-        console.log(`[フィルタリング統計] 除外されたレコード: ${filteredOut}件`);
-        console.log(`  - permissionGroupなし/不正: ${noPermissionGroup}件`);
-        console.log(`  - permissionGroupありだが条件不一致: ${hasPermissionGroupButNoMatch}件`);
+        console.log(`[フィルタリング統計] 除外: ${filteredOut}件 (permissionGroupなし: ${noPermissionGroup}件, 条件不一致: ${hasPermissionGroupButNoMatch}件)`);
       }
     }
 
@@ -498,19 +496,17 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
     const existingEmails = [];
     let updatedCount = 0;
 
+    // ログ行数を節約: 集計のみを出力し、個別のログは削減（最初のバッチのみ詳細ログ）
+    let newUserCandidates = 0;
+    let emailUpdateCandidates = 0;
+    let metadataUpdateCandidates = 0;
+    
     for (const { email, recordId } of recordData) {
       try {
         // まずkintoneレコードIDで既存ユーザーを検索（メモリ上で検索）
         let existingUser = null;
         if (recordId) {
           existingUser = usersByKintoneRecordId.get(String(recordId));
-          if (existingUser) {
-            console.log(`[既存ユーザー発見] kintoneレコードID=${recordId}, email=${email}, Supabase ID=${existingUser.id}`);
-          } else {
-            console.log(`[新規ユーザー候補] kintoneレコードID=${recordId}, email=${email} (レコードIDで未発見)`);
-          }
-        } else {
-          console.log(`[警告] レコードIDが取得できませんでした: email=${email}`);
         }
 
         if (existingUser) {
@@ -520,10 +516,12 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
           if (existingEmailNormalized !== email) {
             // メールアドレスが変更されている場合は更新
             try {
-              console.log(`メールアドレス更新を実行: ${existingUser.email} → ${email}`);
+              if (offset === 0 && emailUpdateCandidates < 2) {
+                console.log(`[メール更新] ${existingUser.email} → ${email} (レコードID: ${recordId})`);
+              }
               await updateUserEmail(existingUser.id, email);
               updatedCount++;
-              console.log(`✅ メールアドレス更新成功: ${existingUser.email} → ${email} (レコードID: ${recordId})`);
+              emailUpdateCandidates++;
             } catch (updateError) {
               console.error(`❌ メールアドレス更新エラー (${email}):`, updateError);
               results.failed++;
@@ -534,7 +532,6 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
             }
           } else {
             // メールアドレスが同じ場合はスキップ
-            console.log(`メールアドレスが同じためスキップ: ${email}`);
             existingEmails.push(email);
           }
         } else {
@@ -543,20 +540,18 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
           const existingUserByEmail = usersByEmail.get(normalizedEmail);
           
           if (existingUserByEmail) {
-            console.log(`[既存ユーザー発見] email=${email} (メールアドレスで検出、レコードIDなし)`);
-            
             // 既存ユーザーにkintoneレコードIDを追加
             if (recordId) {
               try {
                 // kintoneレコードIDが既に設定されているかチェック
                 const currentRecordId = existingUserByEmail.user_metadata?.kintone_record_id;
                 if (!currentRecordId) {
-                  console.log(`[メタデータ更新] 既存ユーザーにkintoneレコードIDを追加: email=${email}, recordId=${recordId}`);
+                  if (offset === 0 && metadataUpdateCandidates < 2) {
+                    console.log(`[メタデータ更新] email=${email}, recordId=${recordId}`);
+                  }
                   await updateUserMetadata(existingUserByEmail.id, recordId);
                   updatedCount++;
-                  console.log(`✅ kintoneレコードID追加成功: email=${email}, recordId=${recordId}`);
-                } else {
-                  console.log(`[メタデータ更新スキップ] 既にkintoneレコードIDが設定されています: email=${email}, 既存ID=${currentRecordId}, 新規ID=${recordId}`);
+                  metadataUpdateCandidates++;
                 }
               } catch (updateError) {
                 console.error(`❌ kintoneレコードID追加エラー (${email}):`, updateError);
@@ -567,7 +562,10 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
             existingEmails.push(email);
           } else {
             // 新規ユーザーとして作成
-            console.log(`[新規ユーザー作成予定] email=${email}, recordId=${recordId || 'なし'}`);
+            if (offset === 0 && newUserCandidates < 2) {
+              console.log(`[新規ユーザー作成予定] email=${email}, recordId=${recordId || 'なし'}`);
+            }
+            newUserCandidates++;
             recordsToCreate.push({ email, kintoneRecordId: recordId });
           }
         }
@@ -576,6 +574,11 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
         // チェックエラーはスキップして続行
         existingEmails.push(email);
       }
+    }
+    
+    // 集計ログを出力（ログ行数を節約）
+    if (newUserCandidates > 0 || emailUpdateCandidates > 0 || metadataUpdateCandidates > 0 || existingEmails.length > 0) {
+      console.log(`[処理サマリー] offset=${offset}, 新規=${newUserCandidates}件, メール更新=${emailUpdateCandidates}件, メタデータ更新=${metadataUpdateCandidates}件, 既存=${existingEmails.length}件`);
     }
 
     // 新規ユーザーを作成
@@ -795,6 +798,7 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
     return sum + (batch.processed || 0);
   }, 0);
   
+  // 重要: ログの表示制限を考慮して、重要な情報のみを出力
   console.log(`=== 全件処理完了 ===`);
   console.log(`処理時間: ${duration}秒`);
   console.log(`バッチ数: ${batchCount}`);
@@ -805,6 +809,14 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
   }
   console.log(`スキップ: ${allResults.totalSkipped}件`);
   console.log(`失敗: ${allResults.totalFailed}件`);
+  
+  // 各バッチのフィルタリング結果を集計（ログ行数を節約）
+  const batchFilteredCounts = allResults.batches.map(b => ({
+    batch: b.batch,
+    offset: b.offset,
+    processed: b.processed || 0,
+  }));
+  console.log(`[バッチ別フィルタリング結果] ${JSON.stringify(batchFilteredCounts)}`);
   
   // 警告: 条件に一致するレコードが想定より少ない場合
   // 注意: 1252名が条件に一致するはずなので、それより少ない場合は全レコードを取得できていない可能性がある
