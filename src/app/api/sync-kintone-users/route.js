@@ -281,7 +281,7 @@ async function syncSingleUser(email) {
 /**
  * バッチ処理
  */
-async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
+async function syncBatch({ batchSize, offset, emailFieldCode, query, remainingFilteredRecords = [] }) {
   const results = {
     success: true,
     processed: 0,
@@ -401,13 +401,14 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query }) {
       }
     }
 
-    // バッチサイズに合わせて切り詰め
-    // 注意: フィルタリング後の残りレコードは、次のバッチで処理するのではなく、
-    // kintoneから新しいレコードを取得するためにoffsetを進める
-    const recordsToProcess = records.slice(0, batchSize);
-    const remainingRecords = records.slice(batchSize);
+    // 前のバッチの残りレコードと今回のフィルタリング結果を結合
+    const allFilteredRecords = [...remainingFilteredRecords, ...records];
     
-    console.log(`フィルタリング後のレコード: 処理対象=${recordsToProcess.length}件, 残り=${remainingRecords.length}件`);
+    // バッチサイズに合わせて切り詰め
+    const recordsToProcess = allFilteredRecords.slice(0, batchSize);
+    const remainingRecords = allFilteredRecords.slice(batchSize);
+    
+    console.log(`フィルタリング後のレコード: 前回残り=${remainingFilteredRecords.length}件, 今回=${records.length}件, 合計=${allFilteredRecords.length}件, 処理対象=${recordsToProcess.length}件, 残り=${remainingRecords.length}件`);
 
     if (recordsToProcess.length === 0) {
       // フィルタリング後に0件になった場合、次のバッチがあるかチェック
@@ -733,6 +734,7 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
         offset: currentOffset,
         emailFieldCode,
         query,
+        remainingFilteredRecords, // 前のバッチの残りレコードを渡す
       });
       const batchElapsed = Date.now() - batchStartTime;
       console.log(`バッチ ${batchCount} の処理時間: ${(batchElapsed / 1000).toFixed(2)}秒`);
@@ -756,12 +758,20 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
         ...result,
       });
 
+      // 残りレコードを取得（次のバッチで処理するため）
+      remainingFilteredRecords = result.remainingFilteredRecords || [];
+      
       // 次のバッチがあるかチェック
-      hasMore = result.hasMore === true;
+      // 残りレコードがある場合、またはkintoneから取得できるレコードがまだある場合
+      hasMore = (remainingFilteredRecords.length > 0) || (result.hasMore === true);
       if (hasMore) {
         const previousOffset = currentOffset;
-        currentOffset = result.nextOffset || (typeof currentOffset === 'number' ? currentOffset + batchSize : 0);
-        console.log(`バッチ ${batchCount} 完了: offset ${previousOffset} → ${currentOffset}, hasMore=${hasMore}`);
+        // 残りレコードがある場合はoffsetを進めない（次のバッチで残りレコードを処理）
+        // 残りレコードがない場合のみoffsetを進める
+        if (remainingFilteredRecords.length === 0) {
+          currentOffset = result.nextOffset || (typeof currentOffset === 'number' ? currentOffset + batchSize : 0);
+        }
+        console.log(`バッチ ${batchCount} 完了: offset ${previousOffset} → ${currentOffset}, 残りフィルタ済み=${remainingFilteredRecords.length}件, hasMore=${hasMore}`);
         
         // offsetが10,000を超える場合は警告
         if (typeof currentOffset === 'number' && currentOffset > 10000) {
