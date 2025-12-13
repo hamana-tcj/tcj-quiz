@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supabase Auth 全ユーザー削除</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #d32f2f;
+      margin-bottom: 10px;
+    }
+    .warning {
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      padding: 20px;
+      border-radius: 4px;
+      margin-bottom: 30px;
+    }
+    .warning h2 {
+      margin-top: 0;
+      color: #856404;
+    }
+    .warning ul {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+    .warning li {
+      margin: 5px 0;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+    }
+    input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-right: 10px;
+    }
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+    button {
+      background: #d32f2f;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #b71c1c;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .loading {
+      display: none;
+      text-align: center;
+      margin-top: 20px;
+    }
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #d32f2f;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .result {
+      margin-top: 30px;
+      padding: 20px;
+      border-radius: 4px;
+      display: none;
+    }
+    .result.success {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+    }
+    .result.error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+    .result.warning {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      color: #856404;
+    }
+    .info {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 20px;
+      font-size: 13px;
+    }
+    .info h3 {
+      margin-top: 0;
+      font-size: 14px;
+    }
+    code {
+      background: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>⚠️ Supabase Auth 全ユーザー削除</h1>
+    
+    <div class="warning">
+      <h2>⚠️ 警告: この操作は取り消せません</h2>
+      <p><strong>この操作を実行する前に、必ず以下を確認してください:</strong></p>
+      <ul>
+        <li>✅ <a href="/export-users.html" target="_blank">バックアップ（CSVエクスポート）</a>を取得済みであること</li>
+        <li>✅ 削除対象のユーザー数を確認済みであること</li>
+        <li>✅ この操作が本当に必要であることを確認済みであること</li>
+        <li>✅ 削除後、同期処理を再実行する予定であること</li>
+      </ul>
+    </div>
+
+    <form id="deleteForm">
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="confirmBackup" required>
+          <span>バックアップ（CSVエクスポート）を取得済みであることを確認しました</span>
+        </label>
+      </div>
+      
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="confirmDelete" required>
+          <span>全ユーザーを削除することを理解し、実行します</span>
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="dryRun" checked>
+          <span>まず削除対象を確認する（dryRunモード）</span>
+        </label>
+        <p style="font-size: 12px; color: #666; margin-top: 5px;">
+          dryRunモードでは、実際には削除せずに削除対象のユーザー一覧を表示します。
+          最初の実行時は、このチェックボックスをONのままにしてください。
+        </p>
+      </div>
+
+      <button type="submit" id="deleteBtn">全ユーザーを削除</button>
+    </form>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>処理中...</p>
+    </div>
+
+    <div class="result" id="result"></div>
+
+    <div class="info">
+      <h3>使用方法</h3>
+      <ol>
+        <li><strong>バックアップを取得</strong>: まず<a href="/export-users.html" target="_blank">CSVエクスポート</a>で全ユーザーをバックアップしてください</li>
+        <li><strong>dryRunモードで確認</strong>: 最初は「削除対象を確認する」にチェックを入れたまま実行し、削除対象を確認してください</li>
+        <li><strong>実際の削除</strong>: 削除対象を確認したら、「削除対象を確認する」のチェックを外して実行してください</li>
+      </ol>
+
+      <h3 style="margin-top: 20px;">API直接呼び出し（上級者向け）</h3>
+      <p>以下のコマンドでAPIを直接呼び出すこともできます:</p>
+      <code>
+        curl -X POST https://your-domain.com/api/delete-all-users \<br>
+        &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
+        &nbsp;&nbsp;-d '{"confirm": true, "dryRun": false}'
+      </code>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('deleteForm');
+    const confirmBackup = document.getElementById('confirmBackup');
+    const confirmDelete = document.getElementById('confirmDelete');
+    const dryRunCheckbox = document.getElementById('dryRun');
+    const deleteBtn = document.getElementById('deleteBtn');
+    const loading = document.getElementById('loading');
+    const result = document.getElementById('result');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (!confirmBackup.checked || !confirmDelete.checked) {
+        alert('すべての確認チェックボックスにチェックを入れてください');
+        return;
+      }
+
+      const dryRun = dryRunCheckbox.checked;
+
+      // 最終確認
+      if (!dryRun) {
+        const finalConfirm = confirm(
+          '⚠️ 最終確認\n\n' +
+          'この操作は取り消せません。\n' +
+          '本当に全ユーザーを削除しますか？\n\n' +
+          'OKをクリックすると削除が実行されます。'
+        );
+        
+        if (!finalConfirm) {
+          return;
+        }
+      }
+
+      // UI更新
+      deleteBtn.disabled = true;
+      loading.style.display = 'block';
+      result.style.display = 'none';
+
+      try {
+        const response = await fetch('/api/delete-all-users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            confirm: true,
+            dryRun: dryRun,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || '削除に失敗しました');
+        }
+
+        // 結果を表示
+        loading.style.display = 'none';
+        result.style.display = 'block';
+
+        if (dryRun) {
+          result.className = 'result warning';
+          result.innerHTML = `
+            <h3>🔍 削除対象の確認（dryRunモード）</h3>
+            <p><strong>削除対象ユーザー数: ${data.totalUsers}件</strong></p>
+            <p>実際には削除していません。削除を実行する場合は、「削除対象を確認する」のチェックを外して再度実行してください。</p>
+            ${data.users ? `
+              <details style="margin-top: 15px;">
+                <summary style="cursor: pointer; font-weight: 600;">削除対象ユーザー一覧（クリックで展開）</summary>
+                <div style="max-height: 400px; overflow-y: auto; margin-top: 10px;">
+                  <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                    <thead>
+                      <tr style="background: #f8f9fa;">
+                        <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">メールアドレス</th>
+                        <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">kintoneレコードID</th>
+                        <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">作成日時</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${data.users.map(user => `
+                        <tr>
+                          <td style="padding: 8px; border: 1px solid #ddd;">${user.email || '(なし)'}</td>
+                          <td style="padding: 8px; border: 1px solid #ddd;">${user.kintone_record_id || '(なし)'}</td>
+                          <td style="padding: 8px; border: 1px solid #ddd;">${user.created_at ? new Date(user.created_at).toLocaleString('ja-JP') : '(なし)'}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            ` : ''}
+          `;
+        } else {
+          if (data.success) {
+            result.className = 'result success';
+            result.innerHTML = `
+              <h3>✅ 削除完了</h3>
+              <p><strong>削除されたユーザー数: ${data.deleted}件</strong></p>
+              <p>${data.message}</p>
+            `;
+          } else {
+            result.className = 'result warning';
+            result.innerHTML = `
+              <h3>⚠️ 部分的な成功</h3>
+              <p><strong>削除されたユーザー数: ${data.deleted}件</strong></p>
+              <p><strong>削除に失敗したユーザー数: ${data.failed}件</strong></p>
+              <p>${data.message}</p>
+              ${data.failedUsers && data.failedUsers.length > 0 ? `
+                <details style="margin-top: 15px;">
+                  <summary style="cursor: pointer; font-weight: 600;">削除に失敗したユーザー一覧（クリックで展開）</summary>
+                  <div style="max-height: 400px; overflow-y: auto; margin-top: 10px;">
+                    <ul>
+                      ${data.failedUsers.map(user => `<li>${user.email}: ${user.error}</li>`).join('')}
+                    </ul>
+                  </div>
+                </details>
+              ` : ''}
+            `;
+          }
+        }
+      } catch (error) {
+        loading.style.display = 'none';
+        result.style.display = 'block';
+        result.className = 'result error';
+        result.innerHTML = `
+          <h3>❌ エラー</h3>
+          <p>${error.message || '削除処理中にエラーが発生しました'}</p>
+        `;
+      } finally {
+        deleteBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
+

@@ -730,6 +730,7 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
   let batchCount = 0;
   let hasMore = true;
   let remainingFilteredRecords = []; // フィルタリング後の残りレコードを保持
+  let previousHasMoreKintoneRecords = false; // 前回のkintoneに残りレコードがあるかのフラグ
 
   // タイムアウト対策: 処理時間を監視（Vercelの制限: 10秒/60秒）
   // Vercel Hobbyプラン: 10秒、Proプラン: 60秒
@@ -785,17 +786,37 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
       // 残りレコードを取得（次のバッチで処理するため）
       remainingFilteredRecords = result.remainingFilteredRecords || [];
       
+      // 前回のkintoneに残りレコードがあるかのフラグを更新
+      // remainingFilteredRecords.length === 0の場合、result.hasMoreがtrueならkintoneに残りレコードがある
+      if (remainingFilteredRecords.length === 0 && result.hasMore === true) {
+        previousHasMoreKintoneRecords = true;
+      } else if (remainingFilteredRecords.length > 0) {
+        // 残りレコードがある場合、前回のフラグを保持
+        // (次のバッチで残りレコードを処理した後、kintoneから新しいレコードを取得する必要があるか判定するため)
+      } else {
+        // remainingFilteredRecords.length === 0 && result.hasMore === false の場合
+        // ただし、前回のフラグがtrueの場合は保持（残りレコードを処理し終わった後、kintoneから新しいレコードを取得する必要があるため）
+        if (!previousHasMoreKintoneRecords) {
+          previousHasMoreKintoneRecords = false;
+        }
+      }
+      
       // 次のバッチがあるかチェック
       // 残りレコードがある場合、またはkintoneから取得できるレコードがまだある場合
-      hasMore = (remainingFilteredRecords.length > 0) || (result.hasMore === true);
+      hasMore = (remainingFilteredRecords.length > 0) || (result.hasMore === true) || previousHasMoreKintoneRecords;
       if (hasMore) {
         const previousOffset = currentOffset;
         // 残りレコードがある場合はoffsetを進めない（次のバッチで残りレコードを処理）
         // 残りレコードがない場合のみoffsetを進める
         if (remainingFilteredRecords.length === 0) {
           currentOffset = result.nextOffset || (typeof currentOffset === 'number' ? currentOffset + batchSize : 0);
+          // offsetを進めたので、前回のフラグをリセット
+          // ただし、result.hasMoreがtrueの場合は、まだkintoneに残りレコードがあるので保持
+          if (result.hasMore !== true) {
+            previousHasMoreKintoneRecords = false;
+          }
         }
-        console.log(`バッチ ${batchCount} 完了: offset ${previousOffset} → ${currentOffset}, 残りフィルタ済み=${remainingFilteredRecords.length}件, hasMore=${hasMore}`);
+        console.log(`バッチ ${batchCount} 完了: offset ${previousOffset} → ${currentOffset}, 残りフィルタ済み=${remainingFilteredRecords.length}件, hasMore=${hasMore}, kintone残り=${previousHasMoreKintoneRecords || result.hasMore === true ? 'あり' : 'なし'}`);
         
         // offsetが10,000を超える場合は警告
         if (typeof currentOffset === 'number' && currentOffset > 10000) {
