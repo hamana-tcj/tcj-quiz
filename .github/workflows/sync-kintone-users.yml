@@ -202,6 +202,14 @@ jobs:
           failed=$(echo "$body" | jq -r '.failed // .totalFailed // 0' 2>/dev/null)
           deleted=$(echo "$body" | jq -r '.deletedCount // 0' 2>/dev/null)
           
+          # offset範囲を取得
+          offsetStart=$(echo "$body" | jq -r '.offsetRange.start // "N/A"' 2>/dev/null)
+          offsetEnd=$(echo "$body" | jq -r '.offsetRange.end // "N/A"' 2>/dev/null)
+          offsetProcessed=$(echo "$body" | jq -r '.offsetRange.processed // "N/A"' 2>/dev/null)
+          offsetDescription=$(echo "$body" | jq -r '.offsetRange.description // ""' 2>/dev/null)
+          nextOffset=$(echo "$body" | jq -r '.nextOffset // "N/A"' 2>/dev/null)
+          stoppedEarly=$(echo "$body" | jq -r '.stoppedEarly // false' 2>/dev/null)
+          
           echo "✅ 処理結果:"
           echo "  処理件数: $processed"
           echo "  作成: $created"
@@ -209,6 +217,27 @@ jobs:
           echo "  失敗: $failed"
           if [ "$deleted" != "0" ] && [ -n "$deleted" ]; then
             echo "  削除: $deleted"
+          fi
+          echo ""
+          echo "📊 処理したoffset範囲（kintoneの全レコード中の位置）:"
+          if [ "$offsetStart" != "N/A" ] && [ "$offsetEnd" != "N/A" ] && [ "$offsetStart" != "null" ] && [ "$offsetEnd" != "null" ]; then
+            echo "  開始offset: $offsetStart"
+            echo "  終了offset: $offsetEnd"
+            if [ "$offsetProcessed" != "N/A" ] && [ "$offsetProcessed" != "null" ]; then
+              echo "  処理範囲: $offsetProcessed件のkintoneレコードを確認"
+            fi
+            if [ -n "$offsetDescription" ] && [ "$offsetDescription" != "null" ]; then
+              echo "  $offsetDescription"
+            fi
+          else
+            echo "  offset範囲の情報が取得できませんでした"
+          fi
+          echo "  次回実行時のoffset: $nextOffset"
+          if [ "$stoppedEarly" = "true" ]; then
+            echo "  ⚠️ 処理が途中で中断されました（タイムアウトまたはmaxBatchesに達した可能性があります）"
+            echo "  → 次回はoffset=$nextOffsetから続きを処理します"
+          elif [ "$nextOffset" = "0" ] || [ "$nextOffset" = "0" ]; then
+            echo "  ✅ 全レコード処理完了のため、次回はoffset=0から開始します（新しいレコードを検出）"
           fi
           echo ""
           echo "完了時刻: $(date)"

@@ -671,6 +671,16 @@ async function syncBatch({ batchSize, offset, emailFieldCode, query, remainingFi
     
     results.nextOffset = nextOffset;
     
+    // kintoneから実際に取得したoffsetの情報を記録（offset範囲の記録用）
+    if (remainingFilteredRecords.length === 0 && allRecords.length > 0) {
+      // kintoneから取得した場合、offset範囲を記録
+      results.kintoneOffsetRange = {
+        start: offset, // 取得開始時のoffset
+        end: nextOffset, // 取得終了時のnextOffset（次のoffsetの開始位置）
+        recordsFetched: allRecords.length, // kintoneから取得したレコード数
+      };
+    }
+    
     if (hasMoreFilteredRecords || hasMoreKintoneRecords) {
       results.hasMore = true;
       console.log(`次のバッチがあります: offset=${offset} → nextOffset=${results.nextOffset}, 取得レコード数=${allRecords.length}, 残りフィルタ済み=${remainingRecords.length}件, kintone残り=${hasMoreKintoneRecords ? 'あり' : 'なし'}`);
@@ -726,7 +736,9 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
     errors: [],
   };
 
+  let startOffset = offset; // 開始offsetを記録（最初にkintoneから取得したoffsetで更新される可能性がある）
   let currentOffset = offset;
+  let endOffset = offset; // 終了offsetを記録（処理が進むたびに更新）
   let batchCount = 0;
   let hasMore = true;
   let remainingFilteredRecords = []; // フィルタリング後の残りレコードを保持
@@ -778,11 +790,26 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
         allResults.errors.push(...result.errors);
       }
 
+      // 終了offsetを更新（処理が進むたびに更新）
+      endOffset = currentOffset;
+      
       allResults.batches.push({
         batch: batchCount,
         offset: currentOffset,
+        nextOffset: result.nextOffset,
         ...result,
       });
+
+      // 処理したoffsetの範囲を更新
+      // kintoneから実際に取得したoffsetを記録（kintoneOffsetRangeが存在する場合のみ）
+      if (result.kintoneOffsetRange) {
+        // kintoneから取得した場合、offset範囲を更新
+        if (batchCount === 1 || startOffset === offset) {
+          startOffset = result.kintoneOffsetRange.start; // 最初にkintoneから取得したoffset
+        }
+        endOffset = result.kintoneOffsetRange.end; // 最後にkintoneから取得したnextOffset（次のoffsetの開始位置）
+        console.log(`[offset範囲更新] バッチ${batchCount}: kintone取得範囲 ${result.kintoneOffsetRange.start} → ${result.kintoneOffsetRange.end} (${result.kintoneOffsetRange.recordsFetched}件取得)`);
+      }
 
       // 残りレコードを取得（次のバッチで処理するため）
       remainingFilteredRecords = result.remainingFilteredRecords || [];
@@ -889,6 +916,10 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
   console.log(`=== 全件処理完了 ===`);
   console.log(`処理時間: ${duration}秒`);
   console.log(`バッチ数: ${batchCount}`);
+  console.log(`📊 処理したoffset範囲: ${startOffset} → ${endOffset} (kintoneの全レコード中の位置)`);
+  console.log(`   開始offset: ${startOffset}`);
+  console.log(`   終了offset: ${endOffset}`);
+  console.log(`   処理範囲: ${typeof startOffset === 'number' && typeof endOffset === 'number' ? endOffset - startOffset : 'N/A'}件のkintoneレコードを確認`);
   if (allResults.stoppedEarly) {
     console.warn(`⚠️ 警告: 処理が途中で中断されました（理由: ${allResults.stoppedReason || '不明'}）`);
     console.warn(`   タイムアウト（${MAX_EXECUTION_TIME / 1000}秒）またはmaxBatches（${maxBatches}）に達した可能性があります`);
@@ -941,6 +972,12 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
     stoppedEarly: allResults.stoppedEarly || (batchCount >= maxBatches && hasMore),
     stoppedReason: allResults.stoppedReason || (batchCount >= maxBatches && hasMore ? 'maxBatches' : null),
     nextOffset: finalNextOffset, // 次の実行で使用するoffset（全件処理完了時は0にリセット）
+    offsetRange: {
+      start: startOffset, // 処理開始時のoffset
+      end: endOffset,     // 処理終了時のoffset
+      processed: typeof startOffset === 'number' && typeof endOffset === 'number' ? endOffset - startOffset : null, // 処理したkintoneレコード数
+      description: `offset ${startOffset} から ${endOffset} まで処理しました（${typeof startOffset === 'number' && typeof endOffset === 'number' ? endOffset - startOffset : 'N/A'}件のkintoneレコードを確認）`,
+    },
     duration: `${duration}秒`,
   });
 }
