@@ -233,7 +233,7 @@
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('/api/delete-users-csv', {
+        const response = await fetch('/api/delete-users', {
           method: 'POST',
           body: formData,
         });
