@@ -284,9 +284,14 @@ export async function createUsersBatch(emailsOrRecords, skipExistenceCheck = fal
           });
           continue;
         }
-        // その他のエラーは失敗として扱う
+        // その他のエラーは失敗として扱う（throwせずに記録）
         console.error(`[ユーザー作成エラー] email=${normalizedEmail}, code=${errorCode}, error=${errorMessage}`);
-        throw error;
+        results.failed.push({
+          email: normalizedEmail,
+          error: errorMessage || 'ユーザー作成に失敗しました',
+          errorCode: errorCode,
+        });
+        continue; // 次のレコードに進む
       }
 
       console.log(`[ユーザー作成成功] email=${normalizedEmail}, userId=${data.user.id}, recordId=${kintoneRecordId || 'なし'}`);

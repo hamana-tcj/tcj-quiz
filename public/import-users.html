@@ -216,7 +216,22 @@
           body: formData,
         });
 
-        const data = await response.json();
+        // レスポンスがJSONかどうかを確認
+        let data;
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            data = await response.json();
+          } catch (jsonError) {
+            // JSON解析エラーの場合、テキストとして読み込む
+            const text = await response.text();
+            throw new Error(`JSON解析エラー: ${text.substring(0, 200)}`);
+          }
+        } else {
+          // JSONでない場合、テキストとして読み込む
+          const text = await response.text();
+          throw new Error(`予期しないレスポンス形式: ${text.substring(0, 200)}`);
+        }
 
         // 結果表示
         loading.style.display = 'none';
@@ -266,9 +281,30 @@
             ` : ''}
           `;
         } else {
+          // エラー時、部分的な結果がある場合は表示
+          const hasPartialResults = data.partialResults && (
+            data.partialResults.created > 0 || 
+            data.partialResults.skipped > 0
+          );
+          
           result.innerHTML = `
             <h3>❌ エラー</h3>
-            <p>${data.error || '登録処理中にエラーが発生しました'}</p>
+            <p><strong>エラー内容:</strong> ${data.error || '登録処理中にエラーが発生しました'}</p>
+            ${data.errorType ? `<p><strong>エラータイプ:</strong> ${data.errorType}</p>` : ''}
+            ${hasPartialResults ? `
+              <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 4px;">
+                <h4>⚠️ 部分的な結果</h4>
+                <p>エラーが発生しましたが、一部のユーザーは登録できています:</p>
+                <ul>
+                  <li>作成: ${data.partialResults.created}件</li>
+                  <li>スキップ: ${data.partialResults.skipped}件</li>
+                  <li>失敗: ${data.partialResults.failed}件</li>
+                </ul>
+                <p style="margin-top: 10px; font-size: 12px;">
+                  <strong>推奨:</strong> エラーを解決してから、残りのユーザーを再度インポートしてください。
+                </p>
+              </div>
+            ` : ''}
           `;
         }
       } catch (error) {

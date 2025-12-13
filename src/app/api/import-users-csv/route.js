@@ -225,11 +225,47 @@ export async function POST(request) {
 
     console.log(`CSV解析完了: 処理対象=${processedCount}件, 新規作成予定=${recordsToCreate.length}件, 既存=${existingEmails.length}件, 更新=${updatedCount}件, 無効=${invalidEmails.length}件`);
 
-    // 新規ユーザーを作成
+    // 新規ユーザーを作成（バッチ処理で分割してタイムアウト対策）
     let createResults = { success: [], skipped: [], failed: [] };
     if (recordsToCreate.length > 0) {
       console.log(`ユーザー作成開始: ${recordsToCreate.length}件`);
-      createResults = await createUsersBatch(recordsToCreate);
+      
+      // バッチサイズを設定（一度に処理する件数）
+      const BATCH_SIZE = 50; // 50件ずつ処理
+      const batches = [];
+      
+      for (let i = 0; i < recordsToCreate.length; i += BATCH_SIZE) {
+        batches.push(recordsToCreate.slice(i, i + BATCH_SIZE));
+      }
+      
+      console.log(`バッチ処理: ${batches.length}バッチに分割（1バッチあたり最大${BATCH_SIZE}件）`);
+      
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        console.log(`バッチ ${batchIndex + 1}/${batches.length} を処理中: ${batch.length}件`);
+        
+        try {
+          const batchResults = await createUsersBatch(batch, true); // skipExistenceCheck=true（既にチェック済み）
+          
+          // 結果を統合
+          createResults.success.push(...batchResults.success);
+          createResults.skipped.push(...batchResults.skipped);
+          createResults.failed.push(...batchResults.failed);
+          
+          console.log(`バッチ ${batchIndex + 1} 完了: 成功=${batchResults.success.length}件, スキップ=${batchResults.skipped.length}件, 失敗=${batchResults.failed.length}件`);
+        } catch (batchError) {
+          console.error(`バッチ ${batchIndex + 1} エラー:`, batchError);
+          
+          // バッチエラー時は、そのバッチの全レコードを失敗として記録
+          for (const record of batch) {
+            createResults.failed.push({
+              email: record.email,
+              error: batchError.message || 'バッチ処理中にエラーが発生しました',
+            });
+          }
+        }
+      }
+      
       console.log(`ユーザー作成完了: 成功=${createResults.success.length}件, スキップ=${createResults.skipped.length}件, 失敗=${createResults.failed.length}件`);
     }
 
@@ -281,13 +317,22 @@ export async function POST(request) {
     return Response.json(result);
   } catch (error) {
     console.error('CSV一括登録エラー:', error);
-    return Response.json(
-      {
-        success: false,
-        error: error.message || 'CSV一括登録中にエラーが発生しました',
+    console.error('エラースタック:', error.stack);
+    
+    // エラー時も必ずJSONレスポンスを返す
+    const errorResponse = {
+      success: false,
+      error: error.message || 'CSV一括登録中にエラーが発生しました',
+      errorType: error.name || 'UnknownError',
+      // 部分的な結果がある場合は含める
+      partialResults: {
+        created: typeof createResults !== 'undefined' ? createResults.success?.length || 0 : 0,
+        skipped: typeof createResults !== 'undefined' ? createResults.skipped?.length || 0 : 0,
+        failed: typeof createResults !== 'undefined' ? createResults.failed?.length || 0 : 0,
       },
-      { status: 500 }
-    );
+    };
+    
+    return Response.json(errorResponse, { status: 500 });
   }
 }
 
