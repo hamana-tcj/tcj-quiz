@@ -812,8 +812,9 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
       
       // 次のバッチがあるかチェック
       // 残りレコードがある場合、またはkintoneから取得できるレコードがまだある場合
-      // lastKintoneNextOffsetがcurrentOffsetと異なる場合、まだkintoneにレコードが残っている可能性がある
-      const hasMoreKintoneRecordsFromLastOffset = lastKintoneNextOffset !== currentOffset && lastKintoneNextOffset !== offset;
+      // lastKintoneNextOffsetがoffsetと異なる場合、まだkintoneにレコードが残っている可能性がある
+      // （lastKintoneNextOffsetがcurrentOffsetと等しい場合でも、remainingFilteredRecordsを処理している間、currentOffsetが更新されていない可能性がある）
+      const hasMoreKintoneRecordsFromLastOffset = lastKintoneNextOffset !== offset;
       hasMore = (remainingFilteredRecords.length > 0) || (result.hasMore === true) || previousHasMoreKintoneRecords || hasMoreKintoneRecordsFromLastOffset;
       if (hasMore) {
         const previousOffset = currentOffset;
@@ -825,12 +826,14 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
           console.log(`[offset更新] kintoneから取得したnextOffsetを使用: ${previousOffset} → ${currentOffset} (残りフィルタ済み=${remainingFilteredRecords.length}件)`);
         } else if (remainingFilteredRecords.length === 0) {
           // 残りレコードがない場合、最後にkintoneから取得したnextOffsetを使用
-          if (lastKintoneNextOffset !== currentOffset && lastKintoneNextOffset !== offset) {
+          // lastKintoneNextOffsetがoffsetと異なる場合、それは最後にkintoneから取得した正しいnextOffset
+          // currentOffsetと等しいかどうかに関わらず、lastKintoneNextOffsetを使用する
+          if (lastKintoneNextOffset !== offset) {
             // 最後にkintoneから取得したnextOffsetを使用
             currentOffset = lastKintoneNextOffset;
             console.log(`[offset更新] 最後のkintone取得のnextOffsetを使用: ${previousOffset} → ${currentOffset}`);
           } else {
-            // 最後のkintone取得のnextOffsetが利用できない場合、batchSize分進める
+            // lastKintoneNextOffsetがoffsetと等しい場合は既に処理済みなので、batchSize分進める
             currentOffset = typeof currentOffset === 'number' ? currentOffset + batchSize : 0;
             console.log(`[offset更新] batchSize分進める: ${previousOffset} → ${currentOffset}`);
           }
