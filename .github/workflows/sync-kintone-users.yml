@@ -40,6 +40,35 @@ jobs:
     timeout-minutes: 10 # タイムアウト設定（10分）
     
     steps:
+      - name: 前回の実行結果を取得（nextOffset）
+        id: get_previous_offset
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: sync-result
+          path: ./
+          if-no-files-found: ignore
+      
+      - name: 前回の実行結果からnextOffsetを決定
+        id: determine_offset
+        continue-on-error: true
+        run: |
+          # 前回の実行結果からnextOffsetを取得
+          if [ -f "sync-result/sync-result.json" ]; then
+            PREVIOUS_NEXT_OFFSET=$(cat sync-result/sync-result.json | jq -r '.nextOffset // "0"' 2>/dev/null || echo "0")
+            PREVIOUS_STOPPED_EARLY=$(cat sync-result/sync-result.json | jq -r '.stoppedEarly // false' 2>/dev/null || echo "false")
+            if [ "$PREVIOUS_STOPPED_EARLY" = "true" ] && [ "$PREVIOUS_NEXT_OFFSET" != "0" ] && [ "$PREVIOUS_NEXT_OFFSET" != "null" ] && [ "$PREVIOUS_NEXT_OFFSET" != "" ]; then
+              echo "前回の実行が途中で中断されました。nextOffset=$PREVIOUS_NEXT_OFFSETから続きを処理します"
+              echo "nextOffset=$PREVIOUS_NEXT_OFFSET" >> $GITHUB_OUTPUT
+            else
+              echo "前回の実行は完了しました。offset=0から開始します"
+              echo "nextOffset=0" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "前回の実行結果が見つかりません。offset=0から開始します"
+            echo "nextOffset=0" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Sync users from kintone to Supabase
         env:
           API_URL: ${{ secrets.API_URL || 'https://your-domain.com' }}
@@ -80,13 +109,16 @@ jobs:
           # タイムアウト対策: batchSizeを50に減らす
           # 対象者が697名のため、maxBatchesを20に設定（50 × 20 = 1000件まで処理可能）
           # 削除処理は別リクエストで実行（タイムアウト回避）
+          # 前回の実行結果からnextOffsetを取得（なければ0）
+          INITIAL_OFFSET="${{ steps.determine_offset.outputs.nextOffset || '0' }}"
           echo "1. ユーザー同期処理を実行..."
           echo "   パラメータ: processAll=$PROCESS_ALL, maxBatches=$MAX_BATCHES, batchSize=$BATCH_SIZE, deleteOrphanedUsers=$DELETE_ORPHANED"
+          echo "   開始offset: $INITIAL_OFFSET"
           sync_response=$(curl -s -L -w "\n%{http_code}\n%{url_effective}" -X POST "$API_URL/api/sync-kintone-users" \
             -H "Content-Type: application/json" \
             -d "{
               \"batchSize\": $BATCH_SIZE,
-              \"offset\": 0,
+              \"offset\": $INITIAL_OFFSET,
               \"emailFieldCode\": \"email\",
               \"query\": \"\",
               \"processAll\": $PROCESS_ALL,
@@ -243,6 +275,19 @@ jobs:
           echo "完了時刻: $(date)"
           echo "=========================================="
           
+          # 実行結果をartifactとして保存（次回の実行で使用）
+          echo "$body" > sync-result.json
+          echo "実行結果をartifactとして保存しました"
+      
+      - name: 実行結果をartifactとして保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-result
+          path: sync-result.json
+          retention-days: 7
+          if-no-files-found: ignore
+      
       - name: Notify on failure
         if: failure()
         run: |
