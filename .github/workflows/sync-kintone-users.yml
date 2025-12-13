@@ -40,32 +40,43 @@ jobs:
     timeout-minutes: 10 # タイムアウト設定（10分）
     
     steps:
-      - name: 前回の実行結果を取得（nextOffset）
-        id: get_previous_offset
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: sync-result
-          path: ./
-          if-no-files-found: ignore
-      
-      - name: 前回の実行結果からnextOffsetを決定
+      - name: 前回の実行結果からnextOffsetを決定（ログから抽出）
         id: determine_offset
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # 前回の実行結果からnextOffsetを取得
-          if [ -f "sync-result/sync-result.json" ]; then
-            PREVIOUS_NEXT_OFFSET=$(cat sync-result/sync-result.json | jq -r '.nextOffset // "0"' 2>/dev/null || echo "0")
-            PREVIOUS_STOPPED_EARLY=$(cat sync-result/sync-result.json | jq -r '.stoppedEarly // false' 2>/dev/null || echo "false")
-            if [ "$PREVIOUS_STOPPED_EARLY" = "true" ] && [ "$PREVIOUS_NEXT_OFFSET" != "0" ] && [ "$PREVIOUS_NEXT_OFFSET" != "null" ] && [ "$PREVIOUS_NEXT_OFFSET" != "" ]; then
-              echo "前回の実行が途中で中断されました。nextOffset=$PREVIOUS_NEXT_OFFSETから続きを処理します"
-              echo "nextOffset=$PREVIOUS_NEXT_OFFSET" >> $GITHUB_OUTPUT
+          echo "前回の実行結果からnextOffsetを決定中..."
+          # GitHub Actions APIを使用して前回の実行結果を取得
+          # 最新の成功した実行（または完了した実行）のログからnextOffsetを抽出
+          PREVIOUS_RUN=$(gh run list --workflow="${{ github.workflow }}" --branch="${{ github.ref_name }}" --limit=2 --json databaseId,conclusion,status --jq '.[1] | select(.conclusion == "success" or .conclusion == "failure" or .status == "completed") | .databaseId' 2>/dev/null || echo "")
+          
+          if [ -n "$PREVIOUS_RUN" ] && [ "$PREVIOUS_RUN" != "null" ]; then
+            echo "前回の実行ID: $PREVIOUS_RUN"
+            # 前回の実行のログから「NEXTOFFSET_FOR_NEXT_RUN=」の行を抽出（確実に取得できる形式）
+            PREVIOUS_LOG=$(gh run view $PREVIOUS_RUN --log 2>/dev/null || echo "")
+            if [ -n "$PREVIOUS_LOG" ]; then
+              # 「NEXTOFFSET_FOR_NEXT_RUN=」の行から値を抽出
+              PREVIOUS_NEXT_OFFSET=$(echo "$PREVIOUS_LOG" | grep "NEXTOFFSET_FOR_NEXT_RUN=" | tail -1 | sed 's/.*NEXTOFFSET_FOR_NEXT_RUN=\([0-9]*\).*/\1/' || echo "0")
+              # 「STOPPED_EARLY_FOR_NEXT_RUN=」の行から値を抽出
+              STOPPED_EARLY=$(echo "$PREVIOUS_LOG" | grep "STOPPED_EARLY_FOR_NEXT_RUN=" | tail -1 | sed 's/.*STOPPED_EARLY_FOR_NEXT_RUN=\(.*\).*/\1/' || echo "false")
+              
+              echo "前回のnextOffset: $PREVIOUS_NEXT_OFFSET"
+              echo "前回のstoppedEarly: $STOPPED_EARLY"
+              
+              if [ "$STOPPED_EARLY" = "true" ] && [ "$PREVIOUS_NEXT_OFFSET" != "0" ] && [ "$PREVIOUS_NEXT_OFFSET" != "" ]; then
+                echo "✅ 前回の実行が途中で中断されました。nextOffset=$PREVIOUS_NEXT_OFFSETから続きを処理します"
+                echo "nextOffset=$PREVIOUS_NEXT_OFFSET" >> $GITHUB_OUTPUT
+              else
+                echo "前回の実行は完了しました。offset=0から開始します"
+                echo "nextOffset=0" >> $GITHUB_OUTPUT
+              fi
             else
-              echo "前回の実行は完了しました。offset=0から開始します"
+              echo "⚠️ 前回の実行ログを取得できませんでした。offset=0から開始します"
               echo "nextOffset=0" >> $GITHUB_OUTPUT
             fi
           else
-            echo "前回の実行結果が見つかりません。offset=0から開始します"
+            echo "⚠️ 前回の実行が見つかりませんでした（初回実行の可能性があります）。offset=0から開始します"
             echo "nextOffset=0" >> $GITHUB_OUTPUT
           fi
       
@@ -265,11 +276,19 @@ jobs:
             echo "  offset範囲の情報が取得できませんでした"
           fi
           echo "  次回実行時のoffset: $nextOffset"
+          # 次回の実行で確実に取得できるように、特定の形式で出力
           if [ "$stoppedEarly" = "true" ]; then
             echo "  ⚠️ 処理が途中で中断されました（タイムアウトまたはmaxBatchesに達した可能性があります）"
             echo "  → 次回はoffset=$nextOffsetから続きを処理します"
+            echo "NEXTOFFSET_FOR_NEXT_RUN=$nextOffset"
+            echo "STOPPED_EARLY_FOR_NEXT_RUN=true"
           elif [ "$nextOffset" = "0" ] || [ "$nextOffset" = "0" ]; then
             echo "  ✅ 全レコード処理完了のため、次回はoffset=0から開始します（新しいレコードを検出）"
+            echo "NEXTOFFSET_FOR_NEXT_RUN=0"
+            echo "STOPPED_EARLY_FOR_NEXT_RUN=false"
+          else
+            echo "NEXTOFFSET_FOR_NEXT_RUN=$nextOffset"
+            echo "STOPPED_EARLY_FOR_NEXT_RUN=false"
           fi
           echo ""
           echo "完了時刻: $(date)"
@@ -277,16 +296,23 @@ jobs:
           
           # 実行結果をartifactとして保存（次回の実行で使用）
           # タイムアウトで中断された場合でも、部分的な結果を保存する
+          echo ""
+          echo "実行結果をartifactとして保存中..."
           if [ -n "$body" ] && [ "$body" != "" ]; then
             echo "$body" > sync-result.json
-            echo "実行結果をartifactとして保存しました"
+            echo "✅ 実行結果をartifactとして保存しました"
+            # デバッグ: 保存した内容を確認
+            echo "保存したnextOffset: $(cat sync-result.json | jq -r '.nextOffset // "N/A"' 2>/dev/null || echo "N/A")"
+            echo "保存したstoppedEarly: $(cat sync-result.json | jq -r '.stoppedEarly // "N/A"' 2>/dev/null || echo "N/A")"
           else
             echo "⚠️ 警告: レスポンスボディが空のため、artifactを保存できませんでした"
             # タイムアウトで中断された場合でも、前回のoffsetを使用できるようにするため、
             # 部分的な結果を保存する（nextOffsetとstoppedEarlyのみ）
             if [ -n "$nextOffset" ] && [ "$nextOffset" != "N/A" ] && [ "$nextOffset" != "null" ]; then
               echo "{\"nextOffset\": $nextOffset, \"stoppedEarly\": true, \"stoppedReason\": \"timeout\"}" > sync-result.json
-              echo "部分的な結果をartifactとして保存しました（nextOffset=$nextOffset）"
+              echo "✅ 部分的な結果をartifactとして保存しました（nextOffset=$nextOffset）"
+            else
+              echo "❌ nextOffsetが取得できなかったため、artifactを保存できませんでした"
             fi
           fi
       
