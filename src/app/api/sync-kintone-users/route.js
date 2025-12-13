@@ -893,6 +893,9 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
     console.warn(`⚠️ 警告: 処理が途中で中断されました（理由: ${allResults.stoppedReason || '不明'}）`);
     console.warn(`   タイムアウト（${MAX_EXECUTION_TIME / 1000}秒）またはmaxBatches（${maxBatches}）に達した可能性があります`);
     console.warn(`   残りのレコードを処理するには、次のoffsetから再実行してください: ${currentOffset}`);
+  } else if (!hasMore) {
+    console.log(`✅ 全レコードの処理が完了しました`);
+    console.log(`   次回の実行では、新しいレコードを検出するため、offset=0から開始します`);
   }
   console.log(`フィルタリング条件に一致したレコード総数: ${totalFilteredRecords}件`);
   console.log(`作成: ${allResults.totalCreated}件`);
@@ -926,12 +929,18 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
     if (allResults.totalSkipped > 0) messageParts.push(`スキップ ${allResults.totalSkipped}件`);
     if (allResults.totalFailed > 0) messageParts.push(`失敗 ${allResults.totalFailed}件`);
     
+    // 全レコードを処理し終わった場合（stoppedEarlyがfalseでhasMoreがfalse）、nextOffsetを0にリセット
+    // これにより、次回の実行で新しいレコードが追加されている場合、0から開始して処理できる
+    const finalNextOffset = (allResults.stoppedEarly || (batchCount >= maxBatches && hasMore)) 
+      ? currentOffset  // タイムアウトやmaxBatchesで止まった場合、続きから処理
+      : 0;              // 全レコードを処理し終わった場合、0にリセット（新しいレコードを検出するため）
+    
     return Response.json({
     ...allResults,
     message: `全件処理完了: ${batchCount}バッチ処理, 合計 ${messageParts.join(', ')}`,
     stoppedEarly: allResults.stoppedEarly || (batchCount >= maxBatches && hasMore),
     stoppedReason: allResults.stoppedReason || (batchCount >= maxBatches && hasMore ? 'maxBatches' : null),
-    nextOffset: currentOffset, // 次の実行で使用するoffset
+    nextOffset: finalNextOffset, // 次の実行で使用するoffset（全件処理完了時は0にリセット）
     duration: `${duration}秒`,
   });
 }
