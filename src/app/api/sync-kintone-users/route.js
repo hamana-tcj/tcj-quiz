@@ -708,6 +708,7 @@ async function syncAllBatches({ batchSize, offset, emailFieldCode, query, maxBat
   let currentOffset = offset;
   let batchCount = 0;
   let hasMore = true;
+  let remainingFilteredRecords = []; // フィルタリング後の残りレコードを保持
 
   // タイムアウト対策: 処理時間を監視（Vercelの制限: 10秒/60秒）
   // Vercel Hobbyプラン: 10秒、Proプラン: 60秒
